@@ -1,8 +1,32 @@
 "use client";
 
+import axios from "axios";
 import { Newspaper, LogIn } from "lucide-react";
+import { ChangeEvent, FormEvent, useState } from "react";
 
 export default function LoginScreen() {
+  const [user, setUser] = useState({
+    username: "testaja2",
+    password: "12345",
+  });
+
+  async function handleLogin(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    try {
+      const result = await axios.post(
+        "https://test-fe.mysellerpintar.com/api/auth/login",
+        user
+      );
+      console.log("🚀 ~ handleLogin ~ result:", result);
+    } catch (error) {
+      console.log("🚀 ~ handleLogin ~ error:", error);
+    }
+  }
+
+  function change(e: ChangeEvent<HTMLInputElement>) {
+    setUser({ ...user, [e.target.name]: e.target.value });
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4">
       <div className="max-w-md w-full space-y-8">
@@ -19,7 +43,7 @@ export default function LoginScreen() {
 
         {/* Login Form */}
         <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
-          <form className="space-y-6">
+          <form onSubmit={handleLogin} className="space-y-6">
             <div>
               <label
                 htmlFor="username"
@@ -30,8 +54,9 @@ export default function LoginScreen() {
               <input
                 id="username"
                 name="username"
+                value={user.username}
+                onChange={change}
                 type="text"
-                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors duration-200 text-gray-900 placeholder-gray-500"
                 placeholder="Enter your username"
               />
@@ -47,8 +72,9 @@ export default function LoginScreen() {
               <input
                 id="password"
                 name="password"
+                value={user.password}
+                onChange={change}
                 type="password"
-                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors duration-200 text-gray-900 placeholder-gray-500"
                 placeholder="Enter your password"
               />
