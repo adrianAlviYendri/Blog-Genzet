@@ -10,13 +10,12 @@ import {
   Plus,
   Edit,
   Trash2,
-  Eye,
-  Calendar,
   Tag,
-  FileText,
+  Calendar,
   ChevronLeft,
   ChevronRight,
   Menu,
+  Users,
 } from "lucide-react";
 import axios from "axios";
 import AdminSidebar from "@/Components/SideBar";
@@ -27,32 +26,6 @@ interface Category {
   name: string;
   createdAt: string;
   updatedAt: string;
-}
-
-interface UserData {
-  id: string;
-  username: string;
-  role: string;
-}
-
-interface Article {
-  id: string;
-  userId: string;
-  categoryId: string;
-  title: string;
-  content: string;
-  imageUrl: string | null;
-  createdAt: string;
-  updatedAt: string;
-  category: Category;
-  user: UserData;
-}
-
-interface ArticleResponse {
-  data: Article[];
-  total: number;
-  page: number;
-  limit: number;
 }
 
 interface CategoryResponse {
@@ -70,25 +43,21 @@ interface ProfileResponse {
   updatedAt: string;
 }
 
-export default function AdminArticlesPage() {
+export default function AdminCategoriesPage() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPage, setTotalPage] = useState(1);
-  const [totalArticles, setTotalArticles] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCategories, setTotalCategories] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [sortBy, setSortBy] = useState("createdAt");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [limit, setLimit] = useState(10);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [limit, setLimit] = useState(10);
 
   // Debounce search term
   useEffect(() => {
@@ -116,7 +85,6 @@ export default function AdminArticlesPage() {
     };
   }, []);
 
-  // ========== FETCH FUNCTIONS ==========
   async function fetchProfile() {
     try {
       const token = localStorage.getItem("token");
@@ -155,71 +123,50 @@ export default function AdminArticlesPage() {
     }
   }
 
-  async function fetchArticles(page = 1) {
+  async function fetchCategories(page = 1) {
     try {
       setIsLoading(true);
 
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
-        sortBy: sortBy,
-        sortOrder: sortOrder,
       });
 
+      // ❌ SALAH: params.append("name", debouncedSearchTerm.trim());
+      // ✅ BENAR: Gunakan "search" sesuai dokumentasi API
       if (debouncedSearchTerm.trim()) {
-        params.append("title", debouncedSearchTerm.trim());
-      }
-
-      if (selectedCategory) {
-        params.append("categoryId", selectedCategory);
+        params.append("search", debouncedSearchTerm.trim());
       }
 
       console.log(
         "🚀 ~ API URL:",
-        `https://test-fe.mysellerpintar.com/api/articles?${params.toString()}`
+        `https://test-fe.mysellerpintar.com/api/categories?${params.toString()}`
       );
 
-      const { data } = await axios.get<ArticleResponse>(
-        `https://test-fe.mysellerpintar.com/api/articles?${params.toString()}`
+      const { data } = await axios.get<CategoryResponse>(
+        `https://test-fe.mysellerpintar.com/api/categories?${params.toString()}`
       );
 
-      console.log("🚀 ~ fetchArticles ~ data:", data);
-
-      setArticles(data.data);
-      setTotalPage(Math.ceil(data.total / limit));
-      setCurrentPage(data.page);
-      setTotalArticles(data.total);
+      setCategories(data.data);
+      setTotalPages(data.totalPages);
+      setCurrentPage(data.currentPage);
+      setTotalCategories(data.totalData);
     } catch (error) {
-      console.log("🚀 ~ fetchArticles ~ error:", error);
+      console.log("🚀 ~ fetchCategories ~ error:", error);
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function fetchCategories() {
-    try {
-      const { data } = await axios.get<CategoryResponse>(
-        "https://test-fe.mysellerpintar.com/api/categories"
-      );
-      setCategories(data.data);
-      console.log("🚀 ~ fetchCategories ~ data:", data.data);
-    } catch (error) {
-      console.log("🚀 ~ fetchCategories ~ error:", error);
-    }
-  }
-
-  // ========== EFFECTS ==========
   useEffect(() => {
     fetchProfile();
-    fetchArticles(1);
-    fetchCategories();
+    fetchCategories(1);
   }, []);
 
   useEffect(() => {
-    fetchArticles(1);
-  }, [debouncedSearchTerm, selectedCategory, sortBy, sortOrder, limit]);
+    fetchCategories(1);
+  }, [debouncedSearchTerm, limit]);
 
-  // ========== HELPER FUNCTIONS ==========
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -228,79 +175,42 @@ export default function AdminArticlesPage() {
     });
   };
 
-  const truncateText = (text: string, maxLength: number) => {
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
+  const handleCreateCategory = () => {
+    router.push("/admin/create-category");
   };
 
-  const stripHtml = (html: string) => {
-    return html.replace(/<[^>]*>/g, "");
+  const handleEditCategory = (categoryId: string) => {
+    router.push(`/admin/categories/${categoryId}/edit`);
   };
 
-  const isValidImageUrl = (url: string | null): url is string => {
-    if (!url) return false;
-    try {
-      const urlObj = new URL(url);
-      return (
-        (urlObj.protocol === "http:" || urlObj.protocol === "https:") &&
-        !url.startsWith("blob:")
-      );
-    } catch {
-      return false;
-    }
-  };
-
-  const handleImageError = (
-    e: React.SyntheticEvent<HTMLImageElement, Event>
-  ) => {
-    console.log("Image failed to load:", e.currentTarget.src);
-    e.currentTarget.style.display = "none";
-  };
-
-  // ========== HANDLER FUNCTIONS ==========
-  const handleViewArticle = (articleId: string) => {
-    router.push(`/admin/articles/${articleId}`);
-  };
-
-  const handleEditArticle = (articleId: string) => {
-    router.push(`/admin/articles/${articleId}/edit`);
-  };
-
-  const handleDeleteArticle = async (articleId: string) => {
-    if (window.confirm("Are you sure you want to delete this article?")) {
+  const handleDeleteCategory = async (categoryId: string) => {
+    if (window.confirm("Are you sure you want to delete this category?")) {
       try {
         const token = localStorage.getItem("token");
         await axios.delete(
-          `https://test-fe.mysellerpintar.com/api/articles/${articleId}`,
+          `https://test-fe.mysellerpintar.com/api/categories/${categoryId}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           }
         );
-        fetchArticles(currentPage);
+        fetchCategories(currentPage);
       } catch (error) {
-        console.log("🚀 ~ handleDeleteArticle ~ error:", error);
+        console.log("🚀 ~ handleDeleteCategory ~ error:", error);
+        alert("Failed to delete category. It might be used by some articles.");
       }
     }
-  };
-
-  const handleCreateArticle = () => {
-    router.push("/admin/articles/create");
-  };
-
-  const handleCategoryManagement = () => {
-    router.push("/admin/categories");
-  };
-
-  const toggleSidebar = () => {
-    setIsSidebarOpen(!isSidebarOpen);
   };
 
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     router.push("/login");
+  };
+
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
   };
 
   return (
@@ -310,7 +220,7 @@ export default function AdminArticlesPage() {
         profile={profile}
         isSidebarOpen={isSidebarOpen}
         toggleSidebar={toggleSidebar}
-        activeMenu="articles"
+        activeMenu="categories"
       />
 
       {/* Main Content */}
@@ -324,7 +234,7 @@ export default function AdminArticlesPage() {
             >
               <Menu className="w-6 h-6" />
             </button>
-            <h1 className="text-xl font-semibold text-gray-900">Articles</h1>
+            <h1 className="text-xl font-semibold text-gray-900">Categories</h1>
           </div>
 
           {/* Profile Dropdown */}
@@ -380,30 +290,14 @@ export default function AdminArticlesPage() {
             {/* Page Info */}
             <div className="mb-6">
               <p className="text-gray-600">
-                Total Articles:{" "}
-                <span className="font-semibold">{totalArticles}</span>
+                Total Categories:{" "}
+                <span className="font-semibold">{totalCategories}</span>
               </p>
             </div>
 
             {/* Controls */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
               <div className="flex flex-col lg:flex-row gap-4 mb-4">
-                {/* Category Filter */}
-                <div className="relative">
-                  <select
-                    value={selectedCategory}
-                    onChange={(e) => setSelectedCategory(e.target.value)}
-                    className="w-full lg:w-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">All Categories</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
                 {/* Search */}
                 <div className="relative flex-1 lg:max-w-md">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -411,7 +305,7 @@ export default function AdminArticlesPage() {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search by title"
+                    placeholder="Search categories..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -423,13 +317,27 @@ export default function AdminArticlesPage() {
                   )}
                 </div>
               </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCreateCategory}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Category
+                </button>
+              </div>
             </div>
 
-            {/* Articles Table */}
+            {/* Categories Table */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               {/* Table Header */}
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Categories List
+                  </h2>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-500">Show:</span>
                     <select
@@ -454,22 +362,22 @@ export default function AdminArticlesPage() {
               )}
 
               {/* Table Content */}
-              {!isLoading && articles.length > 0 && (
+              {!isLoading && categories.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Thumbnails
+                          Name
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Title
+                          Created By
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Category
+                          Created At
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Created at
+                          Updated At
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Actions
@@ -477,50 +385,48 @@ export default function AdminArticlesPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {articles.map((article) => (
-                        <tr key={article.id} className="hover:bg-gray-50">
-                          {/* Thumbnail */}
+                      {categories.map((category) => (
+                        <tr key={category.id} className="hover:bg-gray-50">
+                          {/* Name */}
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="w-16 h-12 bg-gray-100 rounded-lg overflow-hidden">
-                              {isValidImageUrl(article.imageUrl) ? (
-                                <img
-                                  src={article.imageUrl}
-                                  alt={article.title}
-                                  className="w-full h-full object-cover"
-                                  onError={handleImageError}
-                                />
-                              ) : (
-                                <div className="w-full h-full bg-gray-200 flex items-center justify-center">
-                                  <FileText className="w-6 h-6 text-gray-400" />
+                            <div className="flex items-center">
+                              <div className="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                                <Tag className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <div className="ml-4">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {category.name}
                                 </div>
-                              )}
-                            </div>
-                          </td>
-
-                          {/* Title */}
-                          <td className="px-6 py-4">
-                            <div className="max-w-xs">
-                              <div className="text-sm font-medium text-gray-900 truncate">
-                                {truncateText(article.title, 50)}
-                              </div>
-                              <div className="text-sm text-gray-500 truncate">
-                                {truncateText(stripHtml(article.content), 60)}
+                                <div className="text-sm text-gray-500">
+                                  ID: {category.id.substring(0, 8)}...
+                                </div>
                               </div>
                             </div>
                           </td>
 
-                          {/* Category */}
+                          {/* Created By */}
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                              {article.category?.name || "No Category"}
-                            </span>
+                            <div className="flex items-center">
+                              <Users className="w-4 h-4 text-gray-400 mr-2" />
+                              <div className="text-sm text-gray-900">
+                                {category.userId.substring(0, 8)}...
+                              </div>
+                            </div>
                           </td>
 
                           {/* Created At */}
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex items-center">
                               <Calendar className="w-4 h-4 mr-1" />
-                              {formatDate(article.createdAt)}
+                              {formatDate(category.createdAt)}
+                            </div>
+                          </td>
+
+                          {/* Updated At */}
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div className="flex items-center">
+                              <Calendar className="w-4 h-4 mr-1" />
+                              {formatDate(category.updatedAt)}
                             </div>
                           </td>
 
@@ -528,23 +434,18 @@ export default function AdminArticlesPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
-                                onClick={() => handleViewArticle(article.id)}
-                                className="text-blue-600 hover:text-blue-900 p-1 rounded"
-                                title="View Article"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleEditArticle(article.id)}
+                                onClick={() => handleEditCategory(category.id)}
                                 className="text-green-600 hover:text-green-900 p-1 rounded"
-                                title="Edit Article"
+                                title="Edit Category"
                               >
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
-                                onClick={() => handleDeleteArticle(article.id)}
+                                onClick={() =>
+                                  handleDeleteCategory(category.id)
+                                }
                                 className="text-red-600 hover:text-red-900 p-1 rounded"
-                                title="Delete Article"
+                                title="Delete Category"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -558,30 +459,30 @@ export default function AdminArticlesPage() {
               )}
 
               {/* Empty State */}
-              {!isLoading && articles.length === 0 && (
+              {!isLoading && categories.length === 0 && (
                 <div className="text-center py-12">
-                  <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                  <Tag className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No Articles Found
+                    No Categories Found
                   </h3>
                   <p className="text-gray-500 mb-4">
-                    {debouncedSearchTerm || selectedCategory
-                      ? "Try adjusting your search or filter criteria."
-                      : "Get started by creating your first article."}
+                    {debouncedSearchTerm
+                      ? "Try adjusting your search criteria."
+                      : "Get started by creating your first category."}
                   </p>
                   <button
-                    onClick={handleCreateArticle}
+                    onClick={handleCreateCategory}
                     className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
                   >
                     <Plus className="w-4 h-4 mr-2" />
-                    Create Article
+                    Create Category
                   </button>
                 </div>
               )}
             </div>
 
             {/* Pagination */}
-            {totalPage > 1 && !isLoading && (
+            {totalPages > 1 && !isLoading && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4 mt-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                   <div className="mb-4 sm:mb-0">
@@ -592,15 +493,15 @@ export default function AdminArticlesPage() {
                       </span>{" "}
                       to{" "}
                       <span className="font-medium">
-                        {Math.min(currentPage * limit, totalArticles)}
+                        {Math.min(currentPage * limit, totalCategories)}
                       </span>{" "}
-                      of <span className="font-medium">{totalArticles}</span>{" "}
+                      of <span className="font-medium">{totalCategories}</span>{" "}
                       results
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => fetchArticles(currentPage - 1)}
+                      onClick={() => fetchCategories(currentPage - 1)}
                       disabled={currentPage === 1}
                       className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -608,11 +509,11 @@ export default function AdminArticlesPage() {
                       Previous
                     </button>
                     <span className="text-sm text-gray-700">
-                      Page {currentPage} of {totalPage}
+                      Page {currentPage} of {totalPages}
                     </span>
                     <button
-                      onClick={() => fetchArticles(currentPage + 1)}
-                      disabled={currentPage === totalPage}
+                      onClick={() => fetchCategories(currentPage + 1)}
+                      disabled={currentPage === totalPages}
                       className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next
