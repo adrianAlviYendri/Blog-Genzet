@@ -74,11 +74,17 @@ export default function AdminArticlesPage() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [articles, setArticles] = useState<Article[]>([]);
+  // Raw data dari API
+  const [allArticles, setAllArticles] = useState<Article[]>([]);
+  // Data yang sudah difilter
+  const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
+  // Data yang ditampilkan setelah pagination
+  const [displayedArticles, setDisplayedArticles] = useState<Article[]>([]);
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPage, setTotalPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [totalArticles, setTotalArticles] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -116,7 +122,7 @@ export default function AdminArticlesPage() {
     };
   }, []);
 
-  // ========== FETCH FUNCTIONS ==========
+  // ========== API FUNCTIONS ==========
   async function fetchProfile() {
     try {
       const token = localStorage.getItem("token");
@@ -155,42 +161,23 @@ export default function AdminArticlesPage() {
     }
   }
 
-  async function fetchArticles(page = 1) {
+  async function fetchAllArticles() {
     try {
       setIsLoading(true);
 
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-        sortBy: sortBy,
-        sortOrder: sortOrder,
-      });
+      console.log("🚀 ~ Fetching all articles from API");
 
-      if (debouncedSearchTerm.trim()) {
-        params.append("title", debouncedSearchTerm.trim());
-      }
-
-      if (selectedCategory) {
-        params.append("categoryId", selectedCategory);
-      }
-
-      console.log(
-        "🚀 ~ API URL:",
-        `https://test-fe.mysellerpintar.com/api/articles?${params.toString()}`
-      );
-
+      // Ambil semua data tanpa pagination dan filter untuk client-side processing
       const { data } = await axios.get<ArticleResponse>(
-        `https://test-fe.mysellerpintar.com/api/articles?${params.toString()}`
+        "https://test-fe.mysellerpintar.com/api/articles?limit=1000"
       );
 
-      console.log("🚀 ~ fetchArticles ~ data:", data);
+      console.log("🚀 ~ fetchAllArticles ~ data:", data);
 
-      setArticles(data.data);
-      setTotalPage(Math.ceil(data.total / limit));
-      setCurrentPage(data.page);
-      setTotalArticles(data.total);
+      setAllArticles(data.data);
+      setTotalArticles(data.data.length);
     } catch (error) {
-      console.log("🚀 ~ fetchArticles ~ error:", error);
+      console.log("🚀 ~ fetchAllArticles ~ error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -208,16 +195,141 @@ export default function AdminArticlesPage() {
     }
   }
 
+  // ========== CLIENT-SIDE FILTERING, SORTING & PAGINATION ==========
+  const filterAndSortArticles = (
+    articles: Article[],
+    searchTerm: string,
+    categoryId: string,
+    sortBy: string,
+    sortOrder: "asc" | "desc"
+  ) => {
+    let filtered = [...articles];
+
+    // Filter by search term (search in title and content)
+    if (searchTerm.trim()) {
+      const lowerSearchTerm = searchTerm.toLowerCase().trim();
+      filtered = filtered.filter((article) => {
+        const matchesTitle = article.title
+          .toLowerCase()
+          .includes(lowerSearchTerm);
+        const matchesContent = article.content
+          .toLowerCase()
+          .includes(lowerSearchTerm);
+        const matchesCategory = article.category?.name
+          .toLowerCase()
+          .includes(lowerSearchTerm);
+        const matchesAuthor = article.user?.username
+          .toLowerCase()
+          .includes(lowerSearchTerm);
+
+        return (
+          matchesTitle || matchesContent || matchesCategory || matchesAuthor
+        );
+      });
+    }
+
+    // Filter by category
+    if (categoryId) {
+      filtered = filtered.filter(
+        (article) => article.categoryId === categoryId
+      );
+    }
+
+    // Sort articles
+    filtered.sort((a, b) => {
+      let aValue: any;
+      let bValue: any;
+
+      switch (sortBy) {
+        case "title":
+          aValue = a.title.toLowerCase();
+          bValue = b.title.toLowerCase();
+          break;
+        case "category":
+          aValue = a.category?.name.toLowerCase() || "";
+          bValue = b.category?.name.toLowerCase() || "";
+          break;
+        case "createdAt":
+        default:
+          aValue = new Date(a.createdAt).getTime();
+          bValue = new Date(b.createdAt).getTime();
+          break;
+      }
+
+      if (sortOrder === "asc") {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    return filtered;
+  };
+
+  const paginateArticles = (
+    articles: Article[],
+    page: number,
+    limit: number
+  ) => {
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+    return articles.slice(startIndex, endIndex);
+  };
+
   // ========== EFFECTS ==========
   useEffect(() => {
     fetchProfile();
-    fetchArticles(1);
+    fetchAllArticles();
     fetchCategories();
   }, []);
 
+  // Filter and sort articles when dependencies change
   useEffect(() => {
-    fetchArticles(1);
-  }, [debouncedSearchTerm, selectedCategory, sortBy, sortOrder, limit]);
+    const filtered = filterAndSortArticles(
+      allArticles,
+      debouncedSearchTerm,
+      selectedCategory,
+      sortBy,
+      sortOrder
+    );
+
+    setFilteredArticles(filtered);
+
+    // Reset to page 1 when filters change
+    setCurrentPage(1);
+
+    // Calculate total pages
+    const totalPagesCalculated = Math.ceil(filtered.length / limit);
+    setTotalPages(totalPagesCalculated);
+
+    console.log("🚀 ~ Filter and sort applied:", {
+      searchTerm: debouncedSearchTerm,
+      categoryId: selectedCategory,
+      sortBy,
+      sortOrder,
+      totalResults: filtered.length,
+      totalPages: totalPagesCalculated,
+    });
+  }, [
+    allArticles,
+    debouncedSearchTerm,
+    selectedCategory,
+    sortBy,
+    sortOrder,
+    limit,
+  ]);
+
+  // Paginate filtered articles when page or limit changes
+  useEffect(() => {
+    const paginated = paginateArticles(filteredArticles, currentPage, limit);
+    setDisplayedArticles(paginated);
+
+    console.log("🚀 ~ Pagination applied:", {
+      currentPage,
+      limit,
+      displayedCount: paginated.length,
+    });
+  }, [filteredArticles, currentPage, limit]);
 
   // ========== HELPER FUNCTIONS ==========
   const formatDate = (dateString: string) => {
@@ -257,6 +369,38 @@ export default function AdminArticlesPage() {
     e.currentTarget.style.display = "none";
   };
 
+  const highlightSearchTerm = (text: string, searchTerm: string) => {
+    if (!searchTerm.trim()) return text;
+
+    const regex = new RegExp(`(${searchTerm})`, "gi");
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+      regex.test(part) ? (
+        <span key={index} className="bg-yellow-200 text-yellow-800 font-medium">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+
+  const getFilteredTotal = () => {
+    return filteredArticles.length;
+  };
+
+  const getCurrentPageInfo = () => {
+    const start = (currentPage - 1) * limit + 1;
+    const end = Math.min(currentPage * limit, filteredArticles.length);
+    return { start, end };
+  };
+
+  const getCategoryName = (categoryId: string) => {
+    const category = categories.find((cat) => cat.id === categoryId);
+    return category?.name || "Unknown Category";
+  };
+
   // ========== HANDLER FUNCTIONS ==========
   const handleViewArticle = (articleId: string) => {
     router.push(`/admin/articles/${articleId}`);
@@ -278,9 +422,12 @@ export default function AdminArticlesPage() {
             },
           }
         );
-        fetchArticles(currentPage);
+
+        // Refresh data setelah delete
+        fetchAllArticles();
       } catch (error) {
         console.log("🚀 ~ handleDeleteArticle ~ error:", error);
+        alert("Failed to delete article.");
       }
     }
   };
@@ -293,6 +440,15 @@ export default function AdminArticlesPage() {
     router.push("/admin/categories");
   };
 
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setCurrentPage(1);
+  };
+
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
@@ -301,6 +457,12 @@ export default function AdminArticlesPage() {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
     router.push("/login");
+  };
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
+    setSelectedCategory("");
   };
 
   return (
@@ -382,6 +544,11 @@ export default function AdminArticlesPage() {
               <p className="text-gray-600">
                 Total Articles:{" "}
                 <span className="font-semibold">{totalArticles}</span>
+                {(debouncedSearchTerm || selectedCategory) && (
+                  <span className="ml-2 text-blue-600">
+                    (Showing {getFilteredTotal()} filtered results)
+                  </span>
+                )}
               </p>
             </div>
 
@@ -411,10 +578,10 @@ export default function AdminArticlesPage() {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search by title"
+                    placeholder="Search by title, content, category, or author..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {searchTerm !== debouncedSearchTerm && (
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -422,6 +589,70 @@ export default function AdminArticlesPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Sort Controls */}
+                <div className="flex gap-2">
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="createdAt">Sort by Date</option>
+                    <option value="title">Sort by Title</option>
+                    <option value="category">Sort by Category</option>
+                  </select>
+                  <select
+                    value={sortOrder}
+                    onChange={(e) =>
+                      setSortOrder(e.target.value as "asc" | "desc")
+                    }
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="desc">Newest First</option>
+                    <option value="asc">Oldest First</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Filter Info */}
+              {(debouncedSearchTerm || selectedCategory) && (
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                  <span className="text-sm text-gray-600">Active filters:</span>
+                  {debouncedSearchTerm && (
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-sm">
+                      Search: "{debouncedSearchTerm}"
+                    </span>
+                  )}
+                  {selectedCategory && (
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-sm">
+                      Category: {getCategoryName(selectedCategory)}
+                    </span>
+                  )}
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Clear all filters
+                  </button>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCreateArticle}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Create Article
+                </button>
+                <button
+                  onClick={handleCategoryManagement}
+                  className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200"
+                >
+                  <Tag className="w-4 h-4 mr-2" />
+                  Manage Categories
+                </button>
               </div>
             </div>
 
@@ -430,11 +661,16 @@ export default function AdminArticlesPage() {
               {/* Table Header */}
               <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
                 <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-900">
+                    Articles List
+                  </h2>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm text-gray-500">Show:</span>
                     <select
                       value={limit}
-                      onChange={(e) => setLimit(Number(e.target.value))}
+                      onChange={(e) =>
+                        handleLimitChange(Number(e.target.value))
+                      }
                       className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value={10}>10</option>
@@ -454,7 +690,7 @@ export default function AdminArticlesPage() {
               )}
 
               {/* Table Content */}
-              {!isLoading && articles.length > 0 && (
+              {!isLoading && displayedArticles.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -469,6 +705,9 @@ export default function AdminArticlesPage() {
                           Category
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Author
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Created at
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -477,7 +716,7 @@ export default function AdminArticlesPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {articles.map((article) => (
+                      {displayedArticles.map((article) => (
                         <tr key={article.id} className="hover:bg-gray-50">
                           {/* Thumbnail */}
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -501,10 +740,16 @@ export default function AdminArticlesPage() {
                           <td className="px-6 py-4">
                             <div className="max-w-xs">
                               <div className="text-sm font-medium text-gray-900 truncate">
-                                {truncateText(article.title, 50)}
+                                {highlightSearchTerm(
+                                  truncateText(article.title, 50),
+                                  debouncedSearchTerm
+                                )}
                               </div>
                               <div className="text-sm text-gray-500 truncate">
-                                {truncateText(stripHtml(article.content), 60)}
+                                {highlightSearchTerm(
+                                  truncateText(stripHtml(article.content), 60),
+                                  debouncedSearchTerm
+                                )}
                               </div>
                             </div>
                           </td>
@@ -512,8 +757,21 @@ export default function AdminArticlesPage() {
                           {/* Category */}
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                              {article.category?.name || "No Category"}
+                              {highlightSearchTerm(
+                                article.category?.name || "No Category",
+                                debouncedSearchTerm
+                              )}
                             </span>
+                          </td>
+
+                          {/* Author */}
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {highlightSearchTerm(
+                                article.user?.username || "Unknown",
+                                debouncedSearchTerm
+                              )}
+                            </div>
                           </td>
 
                           {/* Created At */}
@@ -558,7 +816,7 @@ export default function AdminArticlesPage() {
               )}
 
               {/* Empty State */}
-              {!isLoading && articles.length === 0 && (
+              {!isLoading && displayedArticles.length === 0 && (
                 <div className="text-center py-12">
                   <FileText className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
@@ -566,9 +824,17 @@ export default function AdminArticlesPage() {
                   </h3>
                   <p className="text-gray-500 mb-4">
                     {debouncedSearchTerm || selectedCategory
-                      ? "Try adjusting your search or filter criteria."
+                      ? "No articles match your current filters. Try adjusting your search criteria."
                       : "Get started by creating your first article."}
                   </p>
+                  {debouncedSearchTerm || selectedCategory ? (
+                    <button
+                      onClick={clearFilters}
+                      className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 mr-2"
+                    >
+                      Clear Filters
+                    </button>
+                  ) : null}
                   <button
                     onClick={handleCreateArticle}
                     className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
@@ -581,26 +847,30 @@ export default function AdminArticlesPage() {
             </div>
 
             {/* Pagination */}
-            {totalPage > 1 && !isLoading && (
+            {totalPages > 1 && !isLoading && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4 mt-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                   <div className="mb-4 sm:mb-0">
                     <p className="text-sm text-gray-700">
                       Showing{" "}
                       <span className="font-medium">
-                        {(currentPage - 1) * limit + 1}
+                        {getCurrentPageInfo().start}
                       </span>{" "}
                       to{" "}
                       <span className="font-medium">
-                        {Math.min(currentPage * limit, totalArticles)}
+                        {getCurrentPageInfo().end}
                       </span>{" "}
-                      of <span className="font-medium">{totalArticles}</span>{" "}
+                      of{" "}
+                      <span className="font-medium">{getFilteredTotal()}</span>{" "}
+                      {debouncedSearchTerm || selectedCategory
+                        ? "filtered "
+                        : ""}
                       results
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => fetchArticles(currentPage - 1)}
+                      onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
                       className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -608,11 +878,11 @@ export default function AdminArticlesPage() {
                       Previous
                     </button>
                     <span className="text-sm text-gray-700">
-                      Page {currentPage} of {totalPage}
+                      Page {currentPage} of {totalPages}
                     </span>
                     <button
-                      onClick={() => fetchArticles(currentPage + 1)}
-                      disabled={currentPage === totalPage}
+                      onClick={() => handlePageChange(currentPage + 1)}
+                      disabled={currentPage === totalPages}
                       className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Next

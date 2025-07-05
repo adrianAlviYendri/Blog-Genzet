@@ -47,7 +47,15 @@ export default function AdminCategoriesPage() {
   const router = useRouter();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const [categories, setCategories] = useState<Category[]>([]);
+  // Raw data dari API
+  const [allCategories, setAllCategories] = useState<Category[]>([]);
+  // Data yang sudah difilter untuk ditampilkan
+  const [filteredCategories, setFilteredCategories] = useState<Category[]>([]);
+  // Data yang ditampilkan setelah pagination
+  const [displayedCategories, setDisplayedCategories] = useState<Category[]>(
+    []
+  );
+
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -85,6 +93,7 @@ export default function AdminCategoriesPage() {
     };
   }, []);
 
+  // ========== API FUNCTIONS ==========
   async function fetchProfile() {
     try {
       const token = localStorage.getItem("token");
@@ -123,50 +132,105 @@ export default function AdminCategoriesPage() {
     }
   }
 
-  async function fetchCategories(page = 1) {
+  async function fetchAllCategories() {
     try {
       setIsLoading(true);
 
-      const params = new URLSearchParams({
-        page: page.toString(),
-        limit: limit.toString(),
-      });
+      console.log("🚀 ~ Fetching all categories from API");
 
-      // ❌ SALAH: params.append("name", debouncedSearchTerm.trim());
-      // ✅ BENAR: Gunakan "search" sesuai dokumentasi API
-      if (debouncedSearchTerm.trim()) {
-        params.append("search", debouncedSearchTerm.trim());
-      }
-
-      console.log(
-        "🚀 ~ API URL:",
-        `https://test-fe.mysellerpintar.com/api/categories?${params.toString()}`
-      );
-
+      // Ambil semua data tanpa pagination untuk client-side filtering
       const { data } = await axios.get<CategoryResponse>(
-        `https://test-fe.mysellerpintar.com/api/categories?${params.toString()}`
+        "https://test-fe.mysellerpintar.com/api/categories?limit=1000"
       );
 
-      setCategories(data.data);
-      setTotalPages(data.totalPages);
-      setCurrentPage(data.currentPage);
-      setTotalCategories(data.totalData);
+      console.log("🚀 ~ fetchAllCategories ~ data:", data);
+
+      setAllCategories(data.data);
+      setTotalCategories(data.data.length);
     } catch (error) {
-      console.log("🚀 ~ fetchCategories ~ error:", error);
+      console.log("🚀 ~ fetchAllCategories ~ error:", error);
     } finally {
       setIsLoading(false);
     }
   }
 
+  // ========== CLIENT-SIDE FILTERING & PAGINATION ==========
+  const filterCategories = (categories: Category[], searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      return categories;
+    }
+
+    const lowerSearchTerm = searchTerm.toLowerCase().trim();
+
+    return categories.filter((category) => {
+      // Search dalam nama category
+      const matchesName = category.name.toLowerCase().includes(lowerSearchTerm);
+
+      // Search dalam ID category (untuk advanced search)
+      const matchesId = category.id.toLowerCase().includes(lowerSearchTerm);
+
+      // Search dalam userId
+      const matchesUserId = category.userId
+        .toLowerCase()
+        .includes(lowerSearchTerm);
+
+      return matchesName || matchesId || matchesUserId;
+    });
+  };
+
+  const paginateCategories = (
+    categories: Category[],
+    page: number,
+    limit: number
+  ) => {
+    const startIndex = (page - 1) * limit;
+    const endIndex = startIndex + limit;
+
+    return categories.slice(startIndex, endIndex);
+  };
+
+  // ========== EFFECTS ==========
   useEffect(() => {
     fetchProfile();
-    fetchCategories(1);
+    fetchAllCategories();
   }, []);
 
+  // Filter categories when search term changes
   useEffect(() => {
-    fetchCategories(1);
-  }, [debouncedSearchTerm, limit]);
+    const filtered = filterCategories(allCategories, debouncedSearchTerm);
+    setFilteredCategories(filtered);
 
+    // Reset to page 1 when search changes
+    setCurrentPage(1);
+
+    // Calculate total pages
+    const totalPagesCalculated = Math.ceil(filtered.length / limit);
+    setTotalPages(totalPagesCalculated);
+
+    console.log("🚀 ~ Filter applied:", {
+      searchTerm: debouncedSearchTerm,
+      totalResults: filtered.length,
+      totalPages: totalPagesCalculated,
+    });
+  }, [allCategories, debouncedSearchTerm, limit]);
+
+  // Paginate filtered categories when page or limit changes
+  useEffect(() => {
+    const paginated = paginateCategories(
+      filteredCategories,
+      currentPage,
+      limit
+    );
+    setDisplayedCategories(paginated);
+
+    console.log("🚀 ~ Pagination applied:", {
+      currentPage,
+      limit,
+      displayedCount: paginated.length,
+    });
+  }, [filteredCategories, currentPage, limit]);
+
+  // ========== HELPER FUNCTIONS ==========
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -175,12 +239,51 @@ export default function AdminCategoriesPage() {
     });
   };
 
+  const highlightSearchTerm = (text: string, searchTerm: string) => {
+    if (!searchTerm.trim()) return text;
+
+    const regex = new RegExp(`(${searchTerm})`, "gi");
+    const parts = text.split(regex);
+
+    return parts.map((part, index) =>
+      regex.test(part) ? (
+        <span key={index} className="bg-yellow-200 text-yellow-800 font-medium">
+          {part}
+        </span>
+      ) : (
+        part
+      )
+    );
+  };
+
+  const getFilteredTotal = () => {
+    return filteredCategories.length;
+  };
+
+  const getCurrentPageInfo = () => {
+    const start = (currentPage - 1) * limit + 1;
+    const end = Math.min(currentPage * limit, filteredCategories.length);
+    return { start, end };
+  };
+
+  // ========== HANDLER FUNCTIONS ==========
   const handleCreateCategory = () => {
     router.push("/admin/create-category");
   };
 
-  const handleEditCategory = (categoryId: string) => {
-    router.push(`/admin/categories/${categoryId}/edit`);
+  const handleEditCategory = (category: Category) => {
+    // Kirim data lengkap melalui query parameters
+    const queryParams = new URLSearchParams({
+      id: category.id,
+      name: category.name,
+      userId: category.userId,
+      createdAt: category.createdAt,
+      updatedAt: category.updatedAt,
+    });
+
+    router.push(
+      `/admin/edit-category/${category.id}?${queryParams.toString()}`
+    );
   };
 
   const handleDeleteCategory = async (categoryId: string) => {
@@ -195,12 +298,23 @@ export default function AdminCategoriesPage() {
             },
           }
         );
-        fetchCategories(currentPage);
+
+        // Refresh data setelah delete
+        fetchAllCategories();
       } catch (error) {
         console.log("🚀 ~ handleDeleteCategory ~ error:", error);
         alert("Failed to delete category. It might be used by some articles.");
       }
     }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const handleLimitChange = (newLimit: number) => {
+    setLimit(newLimit);
+    setCurrentPage(1); // Reset to first page when changing limit
   };
 
   const handleLogout = () => {
@@ -211,6 +325,11 @@ export default function AdminCategoriesPage() {
 
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  const clearSearch = () => {
+    setSearchTerm("");
+    setDebouncedSearchTerm("");
   };
 
   return (
@@ -292,6 +411,11 @@ export default function AdminCategoriesPage() {
               <p className="text-gray-600">
                 Total Categories:{" "}
                 <span className="font-semibold">{totalCategories}</span>
+                {debouncedSearchTerm && (
+                  <span className="ml-2 text-blue-600">
+                    (Showing {getFilteredTotal()} filtered results)
+                  </span>
+                )}
               </p>
             </div>
 
@@ -305,17 +429,47 @@ export default function AdminCategoriesPage() {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search categories..."
+                    placeholder="Search categories by name, ID, or user..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                   {searchTerm !== debouncedSearchTerm && (
                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                     </div>
                   )}
+                  {searchTerm && (
+                    <button
+                      onClick={clearSearch}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                      title="Clear search"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M6 18L18 6M6 6l12 12"
+                        />
+                      </svg>
+                    </button>
+                  )}
                 </div>
+
+                {/* Search Info */}
+                {debouncedSearchTerm && (
+                  <div className="flex items-center text-sm text-gray-600">
+                    <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                      "{debouncedSearchTerm}" - {getFilteredTotal()} results
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -342,7 +496,9 @@ export default function AdminCategoriesPage() {
                     <span className="text-sm text-gray-500">Show:</span>
                     <select
                       value={limit}
-                      onChange={(e) => setLimit(Number(e.target.value))}
+                      onChange={(e) =>
+                        handleLimitChange(Number(e.target.value))
+                      }
                       className="px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value={10}>10</option>
@@ -362,7 +518,7 @@ export default function AdminCategoriesPage() {
               )}
 
               {/* Table Content */}
-              {!isLoading && categories.length > 0 && (
+              {!isLoading && displayedCategories.length > 0 && (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200">
                     <thead className="bg-gray-50">
@@ -385,7 +541,7 @@ export default function AdminCategoriesPage() {
                       </tr>
                     </thead>
                     <tbody className="bg-white divide-y divide-gray-200">
-                      {categories.map((category) => (
+                      {displayedCategories.map((category) => (
                         <tr key={category.id} className="hover:bg-gray-50">
                           {/* Name */}
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -395,10 +551,17 @@ export default function AdminCategoriesPage() {
                               </div>
                               <div className="ml-4">
                                 <div className="text-sm font-medium text-gray-900">
-                                  {category.name}
+                                  {highlightSearchTerm(
+                                    category.name,
+                                    debouncedSearchTerm
+                                  )}
                                 </div>
                                 <div className="text-sm text-gray-500">
-                                  ID: {category.id.substring(0, 8)}...
+                                  ID:{" "}
+                                  {highlightSearchTerm(
+                                    category.id.substring(0, 8) + "...",
+                                    debouncedSearchTerm
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -409,7 +572,10 @@ export default function AdminCategoriesPage() {
                             <div className="flex items-center">
                               <Users className="w-4 h-4 text-gray-400 mr-2" />
                               <div className="text-sm text-gray-900">
-                                {category.userId.substring(0, 8)}...
+                                {highlightSearchTerm(
+                                  category.userId.substring(0, 8) + "...",
+                                  debouncedSearchTerm
+                                )}
                               </div>
                             </div>
                           </td>
@@ -434,7 +600,7 @@ export default function AdminCategoriesPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex items-center space-x-2">
                               <button
-                                onClick={() => handleEditCategory(category.id)}
+                                onClick={() => handleEditCategory(category)}
                                 className="text-green-600 hover:text-green-900 p-1 rounded"
                                 title="Edit Category"
                               >
@@ -459,17 +625,27 @@ export default function AdminCategoriesPage() {
               )}
 
               {/* Empty State */}
-              {!isLoading && categories.length === 0 && (
+              {!isLoading && displayedCategories.length === 0 && (
                 <div className="text-center py-12">
                   <Tag className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                   <h3 className="text-lg font-medium text-gray-900 mb-2">
-                    No Categories Found
+                    {debouncedSearchTerm
+                      ? "No Categories Found"
+                      : "No Categories Yet"}
                   </h3>
                   <p className="text-gray-500 mb-4">
                     {debouncedSearchTerm
-                      ? "Try adjusting your search criteria."
+                      ? `No categories match "${debouncedSearchTerm}". Try a different search term.`
                       : "Get started by creating your first category."}
                   </p>
+                  {debouncedSearchTerm ? (
+                    <button
+                      onClick={clearSearch}
+                      className="inline-flex items-center px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200 mr-2"
+                    >
+                      Clear Search
+                    </button>
+                  ) : null}
                   <button
                     onClick={handleCreateCategory}
                     className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
@@ -489,19 +665,20 @@ export default function AdminCategoriesPage() {
                     <p className="text-sm text-gray-700">
                       Showing{" "}
                       <span className="font-medium">
-                        {(currentPage - 1) * limit + 1}
+                        {getCurrentPageInfo().start}
                       </span>{" "}
                       to{" "}
                       <span className="font-medium">
-                        {Math.min(currentPage * limit, totalCategories)}
+                        {getCurrentPageInfo().end}
                       </span>{" "}
-                      of <span className="font-medium">{totalCategories}</span>{" "}
-                      results
+                      of{" "}
+                      <span className="font-medium">{getFilteredTotal()}</span>{" "}
+                      {debouncedSearchTerm ? "filtered " : ""}results
                     </p>
                   </div>
                   <div className="flex items-center space-x-2">
                     <button
-                      onClick={() => fetchCategories(currentPage - 1)}
+                      onClick={() => handlePageChange(currentPage - 1)}
                       disabled={currentPage === 1}
                       className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -512,7 +689,7 @@ export default function AdminCategoriesPage() {
                       Page {currentPage} of {totalPages}
                     </span>
                     <button
-                      onClick={() => fetchCategories(currentPage + 1)}
+                      onClick={() => handlePageChange(currentPage + 1)}
                       disabled={currentPage === totalPages}
                       className="inline-flex items-center px-3 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >

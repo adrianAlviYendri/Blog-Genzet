@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Tag } from "lucide-react";
 import axios from "axios";
 import AdminSidebar from "@/Components/SideBar";
-import CategoryForm from "@/Components/Category";
+import CategoryForm from "@/Components/CategoryForm";
 
 interface ProfileResponse {
   id: string;
@@ -30,18 +30,44 @@ interface CategoryFormData {
 export default function EditCategoryPage() {
   const router = useRouter();
   const { id } = useParams();
+  const searchParams = useSearchParams();
+
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [category, setCategory] = useState<Category | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [isFetching, setIsFetching] = useState(true);
 
   useEffect(() => {
     fetchProfile();
-    if (id) {
-      fetchCategory(id as string);
+    loadCategoryFromParams();
+  }, []);
+
+  // Load category data dari query parameters
+  const loadCategoryFromParams = () => {
+    try {
+      const categoryData = {
+        id: searchParams.get("id") || (id as string),
+        name: searchParams.get("name") || "",
+        userId: searchParams.get("userId") || "",
+        createdAt: searchParams.get("createdAt") || "",
+        updatedAt: searchParams.get("updatedAt") || "",
+      };
+
+      // Validasi data yang diperlukan tersedia
+      if (categoryData.id && categoryData.name) {
+        setCategory(categoryData);
+        console.log("🚀 ~ Category loaded from params:", categoryData);
+      } else {
+        console.error("Missing required category data in URL params");
+        alert("Invalid category data. Redirecting to categories list.");
+        router.push("/admin/categories");
+      }
+    } catch (error) {
+      console.error("🚀 ~ Error loading category from params:", error);
+      alert("Error loading category data. Redirecting to categories list.");
+      router.push("/admin/categories");
     }
-  }, [id]);
+  };
 
   async function fetchProfile() {
     try {
@@ -81,49 +107,15 @@ export default function EditCategoryPage() {
     }
   }
 
-  async function fetchCategory(categoryId: string) {
-    try {
-      setIsFetching(true);
-      const token = localStorage.getItem("token");
-
-      console.log("🚀 ~ Fetching category:", categoryId);
-
-      const { data } = await axios.get<Category>(
-        `https://test-fe.mysellerpintar.com/api/categories/${categoryId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      console.log("🚀 ~ Category fetched:", data);
-      setCategory(data);
-    } catch (error: any) {
-      console.log("🚀 ~ fetchCategory ~ error:", error);
-
-      if (error.response?.status === 404) {
-        alert("Category not found");
-        router.push("/admin/categories");
-      } else if (error.response?.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("role");
-        router.push("/login");
-      }
-    } finally {
-      setIsFetching(false);
-    }
-  }
-
   const handleUpdateCategory = async (data: CategoryFormData) => {
     try {
       setIsLoading(true);
       const token = localStorage.getItem("token");
 
-      console.log("🚀 ~ Updating category:", data);
+      console.log("🚀 ~ Updating category:", { id: category?.id, data });
 
       const response = await axios.put(
-        `https://test-fe.mysellerpintar.com/api/categories/${id}`,
+        `https://test-fe.mysellerpintar.com/api/categories/${category?.id}`,
         data,
         {
           headers: {
@@ -135,8 +127,7 @@ export default function EditCategoryPage() {
 
       console.log("🚀 ~ Category updated successfully:", response.data);
 
-      // Show success message (you can add a toast notification here)
-      alert("Category updated successfully!");
+      // Show success message
 
       // Redirect to categories list
       router.push("/admin/categories");
@@ -156,8 +147,8 @@ export default function EditCategoryPage() {
     router.push("/admin/categories");
   };
 
-  // Loading state
-  if (isFetching) {
+  // Loading state - hanya saat fetch profile
+  if (!category) {
     return (
       <div className="min-h-screen bg-gray-50 flex">
         <AdminSidebar
@@ -170,40 +161,6 @@ export default function EditCategoryPage() {
           <div className="text-center">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p className="text-gray-600 text-lg">Loading category...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Error state
-  if (!category) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex">
-        <AdminSidebar
-          profile={profile}
-          isSidebarOpen={isSidebarOpen}
-          toggleSidebar={toggleSidebar}
-          activeMenu="categories"
-        />
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center max-w-md mx-auto px-6">
-            <div className="bg-red-100 rounded-full p-4 w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-              <Tag className="w-8 h-8 text-red-600" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              Category Not Found
-            </h1>
-            <p className="text-gray-600 mb-6">
-              The category you're looking for doesn't exist or has been deleted.
-            </p>
-            <button
-              onClick={handleBackToCategories}
-              className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow hover:bg-blue-700 transition-colors duration-200"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              Back to Categories
-            </button>
           </div>
         </div>
       </div>
@@ -265,6 +222,18 @@ export default function EditCategoryPage() {
                 <span className="font-medium">Created:</span>
                 <span className="ml-2">
                   {new Date(category.createdAt).toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center text-sm text-gray-600 mt-2">
+                <span className="font-medium">Last Updated:</span>
+                <span className="ml-2">
+                  {new Date(category.updatedAt).toLocaleDateString("en-US", {
                     year: "numeric",
                     month: "long",
                     day: "numeric",

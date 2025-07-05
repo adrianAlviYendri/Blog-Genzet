@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, Tag } from "lucide-react";
 import axios from "axios";
 import AdminSidebar from "@/Components/SideBar";
-import CategoryForm from "@/Components/Category";
+import CategoryForm from "@/Components/CategoryForm";
 
 interface ProfileResponse {
   id: string;
@@ -84,11 +84,11 @@ export default function CreateCategoryPage() {
           },
         }
       );
+      console.log("🚀 ~ handleCreateCategory ~ response:", response);
 
       console.log("🚀 ~ Category created successfully:", response.data);
 
       // Show success message (you can add a toast notification here)
-      alert("Category created successfully!");
 
       // Redirect to categories list
       router.push("/admin/categories");
