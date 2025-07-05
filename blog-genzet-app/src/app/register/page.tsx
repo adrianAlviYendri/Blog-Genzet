@@ -23,9 +23,7 @@ const registerSchema = z.object({
     .min(1, "Password is required")
     .min(5, "Password must be at least 5 characters")
     .max(100, "Password must be less than 100 characters"),
-  role: z.enum(["User", "Admin"], {
-    errorMap: () => ({ message: "Please select a valid role" }),
-  }),
+  // Hapus role dari schema karena akan di-set default
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -43,19 +41,29 @@ export default function RegisterScreen() {
     defaultValues: {
       username: "",
       password: "",
-      role: "User",
     },
   });
 
   const onSubmit = async (data: RegisterFormData) => {
     try {
       clearErrors();
+
+      // Tambahkan role "User" secara default saat mengirim ke API
+      const registerData = {
+        ...data,
+        role: "User" as const,
+      };
+
       const result = await axios.post(
         "https://test-fe.mysellerpintar.com/api/auth/register",
-        data
+        registerData
       );
       console.log("🚀 ~ Register success:", result);
-      push("/login");
+
+      // Redirect ke login dengan success message
+      push(
+        "/login?message=Registration successful! Please login with your credentials."
+      );
     } catch (error: any) {
       console.log("🚀 ~ Register error:", error);
 
@@ -87,7 +95,7 @@ export default function RegisterScreen() {
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Blog Genzet</h2>
           <p className="text-gray-600">
-            Create your account to start writing amazing content
+            Create your account to start reading amazing content
           </p>
         </div>
 
@@ -149,30 +157,20 @@ export default function RegisterScreen() {
               )}
             </div>
 
-            <div>
-              <label
-                htmlFor="role"
-                className="block text-sm font-semibold text-gray-700 mb-2"
-              >
-                Role
-              </label>
-              <select
-                id="role"
-                {...register("role")}
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors duration-200 text-gray-900 ${
-                  errors.role
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                }`}
-              >
-                <option value="User">User</option>
-                <option value="Admin">Admin</option>
-              </select>
-              {errors.role && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.role.message}
-                </p>
-              )}
+            {/* Role Info - Informational only */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <UserPlus className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-800">
+                    You will be registered as a{" "}
+                    <span className="font-semibold">User</span> and can access
+                    all articles and content.
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div>

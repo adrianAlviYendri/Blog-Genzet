@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Tag } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 import axios from "axios";
 import Swal from "sweetalert2";
 import AdminSidebar from "@/Components/SideBar";
-import CategoryForm from "@/Components/CategoryForm";
+import ArticleForm from "@/Components/ArticleForm";
 
 interface ProfileResponse {
   id: string;
@@ -16,13 +16,28 @@ interface ProfileResponse {
   updatedAt: string;
 }
 
-interface CategoryFormData {
+interface Category {
+  id: string;
   name: string;
 }
 
-export default function CreateCategoryPage() {
+interface CategoryResponse {
+  data: Category[];
+  totalData: number;
+  currentPage: number;
+  totalPages: number;
+}
+
+interface ArticleFormData {
+  title: string;
+  content: string;
+  categoryId: string;
+}
+
+export default function CreateArticlePage() {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -66,12 +81,21 @@ export default function CreateCategoryPage() {
     }
   };
 
-  const handleCreateCategory = async (data: CategoryFormData) => {
+  const fetchCategories = async () => {
+    try {
+      const { data } = await axios.get<CategoryResponse>(
+        "https://test-fe.mysellerpintar.com/api/categories?limit=1000"
+      );
+      setCategories(data.data);
+    } catch (error) {}
+  };
+
+  const handleCreateArticle = async (data: ArticleFormData) => {
     try {
       setIsLoading(true);
 
       const response = await axios.post(
-        "https://test-fe.mysellerpintar.com/api/categories",
+        "https://test-fe.mysellerpintar.com/api/articles",
         data,
         {
           headers: {
@@ -83,10 +107,10 @@ export default function CreateCategoryPage() {
 
       await Swal.fire({
         title: "Success!",
-        text: `Category "${data.name}" has been created successfully!`,
+        text: `Article "${data.title}" has been created successfully!`,
         icon: "success",
         showCancelButton: true,
-        confirmButtonText: "Back to Categories",
+        confirmButtonText: "Back to Articles",
         cancelButtonText: "Create Another",
         confirmButtonColor: "#3B82F6",
         cancelButtonColor: "#6B7280",
@@ -100,7 +124,7 @@ export default function CreateCategoryPage() {
         },
       }).then((result) => {
         if (result.isConfirmed) {
-          router.push("/admin/categories");
+          router.push("/admin");
         }
       });
     } catch (error: any) {
@@ -108,7 +132,7 @@ export default function CreateCategoryPage() {
         title: "Error!",
         text:
           error.response?.data?.message ||
-          "Failed to create category. Please try again.",
+          "Failed to create article. Please try again.",
         icon: "error",
         confirmButtonText: "OK",
         confirmButtonColor: "#EF4444",
@@ -128,12 +152,12 @@ export default function CreateCategoryPage() {
     setIsSidebarOpen(!isSidebarOpen);
   };
 
-  const handleBackToCategories = () => {
-    router.push("/admin/categories");
+  const handleBackToArticles = () => {
+    router.push("/admin");
   };
 
   const initializeAllData = async () => {
-    await fetchProfile();
+    await Promise.all([fetchProfile(), fetchCategories()]);
   };
 
   useEffect(() => {
@@ -145,43 +169,44 @@ export default function CreateCategoryPage() {
       <AdminSidebar
         isSidebarOpen={isSidebarOpen}
         toggleSidebar={toggleSidebar}
-        activeMenu="categories"
+        activeMenu="articles"
       />
 
       <div className="lg:ml-64 flex flex-col min-h-screen">
         <header className="bg-white shadow-sm border-b h-16 flex items-center justify-between px-4 lg:px-6">
           <div className="flex items-center">
             <button
-              onClick={handleBackToCategories}
+              onClick={handleBackToArticles}
               className="inline-flex items-center text-gray-600 hover:text-gray-900 transition-colors duration-200 mr-4"
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
-              <span className="font-medium">Back to Categories</span>
+              <span className="font-medium">Back to Articles</span>
             </button>
             <div className="flex items-center">
-              <Tag className="w-5 h-5 text-gray-400 mr-2" />
+              <FileText className="w-5 h-5 text-gray-400 mr-2" />
               <h1 className="text-xl font-semibold text-gray-900">
-                Create Category
+                Create Article
               </h1>
             </div>
           </div>
         </header>
 
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50">
-          <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Add New Category
+                Create New Article
               </h2>
               <p className="text-gray-600">
-                Create a new category to help organize your articles and improve
-                content discovery.
+                Write and publish your article to share knowledge with your
+                readers.
               </p>
             </div>
 
-            <CategoryForm
+            <ArticleForm
               mode="create"
-              onSubmit={handleCreateCategory}
+              categories={categories}
+              onSubmit={handleCreateArticle}
               isLoading={isLoading}
             />
           </div>

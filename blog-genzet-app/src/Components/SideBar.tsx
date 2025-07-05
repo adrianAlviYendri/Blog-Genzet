@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { Newspaper, User, LogOut, Tag, FileText, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import axios from "axios";
 
 interface ProfileResponse {
   id: string;
@@ -12,25 +14,25 @@ interface ProfileResponse {
 }
 
 interface AdminSidebarProps {
-  profile: ProfileResponse | null;
   isSidebarOpen: boolean;
   toggleSidebar: () => void;
   activeMenu: "articles" | "categories";
 }
 
+function getCookie(name: string): string | undefined {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) return parts.pop()?.split(";").shift();
+}
+
 export default function AdminSidebar({
-  profile,
   isSidebarOpen,
   toggleSidebar,
   activeMenu,
 }: AdminSidebarProps) {
   const router = useRouter();
-
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    router.push("/login");
-  };
+  const [profile, setProfile] = useState<ProfileResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const handleArticlesPage = () => {
     router.push("/admin");
@@ -40,13 +42,54 @@ export default function AdminSidebar({
     router.push("/admin/categories");
   };
 
+  const fetchProfile = async () => {
+    try {
+      setIsLoading(true);
+      const token = getCookie("token");
+
+      if (!token) {
+        console.log("No token found in cookies");
+        router.push("/login");
+        return;
+      }
+
+      const { data } = await axios.get<ProfileResponse>(
+        "https://test-fe.mysellerpintar.com/api/auth/profile",
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      setProfile(data);
+      console.log("Profile loaded:", data);
+    } catch (error: any) {
+      console.error("Error fetching profile:", error);
+      if (error.response?.status === 401) {
+        // Clear cookies on unauthorized
+        document.cookie =
+          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie =
+          "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        router.push("/login");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
   return (
     <>
-      {/* Sidebar */}
+      {/* Fixed Sidebar for all screen sizes */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-blue-600 transform ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        } transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0`}
+        } lg:translate-x-0 transition-transform duration-300 ease-in-out`}
       >
         <div className="flex items-center justify-between h-16 px-6 bg-blue-700">
           <div className="flex items-center">
@@ -71,10 +114,18 @@ export default function AdminSidebar({
               </div>
               <div>
                 <div className="text-white font-medium">
-                  {profile?.username || "Admin"}
+                  {isLoading ? (
+                    <div className="animate-pulse bg-blue-400 h-4 w-16 rounded"></div>
+                  ) : (
+                    profile?.username || "Admin"
+                  )}
                 </div>
                 <div className="text-blue-200 text-sm">
-                  {profile?.role || "Administrator"}
+                  {isLoading ? (
+                    <div className="animate-pulse bg-blue-400 h-3 w-12 rounded mt-1"></div>
+                  ) : (
+                    profile?.role || "Administrator"
+                  )}
                 </div>
               </div>
             </div>
@@ -117,7 +168,7 @@ export default function AdminSidebar({
         </nav>
       </div>
 
-      {/* Sidebar Overlay for Mobile */}
+      {/* Mobile Overlay */}
       {isSidebarOpen && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden"
