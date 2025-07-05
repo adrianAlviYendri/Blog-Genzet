@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useEffect, useState } from "react";
 
 const loginSchema = z.object({
   username: z
@@ -30,6 +31,7 @@ interface LoginResponse {
 
 export default function LoginScreen() {
   const router = useRouter();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
 
   const {
     register,
@@ -40,10 +42,53 @@ export default function LoginScreen() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: "testaja2",
+      username: "aniani",
       password: "12345",
     },
   });
+
+  // ✅ Helper function (tidak dipanggil saat render)
+  function getCookie(name: string): string | undefined {
+    if (typeof window === "undefined") return undefined; // Check if we're in browser
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(";").shift();
+  }
+
+  // ✅ Check auth dalam useEffect (client-side only)
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        const token = getCookie("token");
+        const role = getCookie("role");
+
+        if (token && role) {
+          if (role === "Admin") {
+            router.push("/admin");
+          } else if (role === "User") {
+            router.push("/user");
+          } else {
+            router.push("/");
+          }
+          return;
+        }
+      } catch (error) {
+        console.log("🚀 ~ checkAuth ~ error:", error);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+
+    checkAuth();
+  }, [router]);
+
+  const setCookie = (name: string, value: string, days: number = 7) => {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Strict;Secure=${
+      location.protocol === "https:"
+    }`;
+  };
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -57,8 +102,8 @@ export default function LoginScreen() {
 
       const responseData: LoginResponse = result.data;
 
-      localStorage.setItem("token", responseData.token);
-      localStorage.setItem("role", responseData.role);
+      setCookie("token", responseData.token, 7);
+      setCookie("role", responseData.role, 7);
 
       if (responseData.role === "Admin") {
         router.push("/admin");
@@ -88,6 +133,18 @@ export default function LoginScreen() {
       }
     }
   };
+
+  // ✅ Show loading while checking auth
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4">
