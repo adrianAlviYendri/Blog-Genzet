@@ -1,37 +1,33 @@
 "use client";
 
+import { useState, useEffect, Suspense } from "react";
 import axios from "axios";
-import { Newspaper, LogIn } from "lucide-react";
+import { Eye, EyeOff, Newspaper, AlertCircle } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 const loginSchema = z.object({
   username: z
     .string()
     .min(1, "Username is required")
-    .min(3, "Username must be at least 3 characters")
-    .max(50, "Username must be less than 50 characters"),
+    .min(3, "Username must be at least 3 characters"),
   password: z
     .string()
     .min(1, "Password is required")
-    .min(5, "Password must be at least 5 characters")
-    .max(100, "Password must be less than 100 characters"),
+    .min(5, "Password must be at least 5 characters"),
 });
 
 type LoginFormData = z.infer<typeof loginSchema>;
 
-interface LoginResponse {
-  token: string;
-  role: "User" | "Admin";
-}
-
-export default function LoginScreen() {
-  const router = useRouter();
-  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+// Create a component that uses useSearchParams
+function LoginForm() {
+  const [showPassword, setShowPassword] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const { push } = useRouter();
+  const searchParams = useSearchParams();
 
   const {
     register,
@@ -42,89 +38,60 @@ export default function LoginScreen() {
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      username: "aniani",
-      password: "12345",
+      username: "",
+      password: "",
     },
   });
 
-  // ✅ Helper function (tidak dipanggil saat render)
-  function getCookie(name: string): string | undefined {
-    if (typeof window === "undefined") return undefined; // Check if we're in browser
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop()?.split(";").shift();
-  }
-
-  // ✅ Check auth dalam useEffect (client-side only)
   useEffect(() => {
-    const checkAuth = () => {
-      try {
-        const token = getCookie("token");
-        const role = getCookie("role");
-
-        if (token && role) {
-          if (role === "Admin") {
-            router.push("/admin");
-          } else if (role === "User") {
-            router.push("/user");
-          } else {
-            router.push("/");
-          }
-          return;
-        }
-      } catch (error) {
-        console.log("🚀 ~ checkAuth ~ error:", error);
-      } finally {
-        setIsCheckingAuth(false);
-      }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  const setCookie = (name: string, value: string, days: number = 7) => {
-    const expires = new Date();
-    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Strict;Secure=${
-      location.protocol === "https:"
-    }`;
-  };
+    const message = searchParams.get("message");
+    if (message) {
+      setSuccessMessage(message);
+      setTimeout(() => setSuccessMessage(""), 5000);
+    }
+  }, [searchParams]);
 
   const onSubmit = async (data: LoginFormData) => {
     try {
       clearErrors();
+
       const result = await axios.post(
         "https://test-fe.mysellerpintar.com/api/auth/login",
         data
       );
 
-      console.log("🚀 ~ Login success:", result);
+      const { token, role } = result.data;
 
-      const responseData: LoginResponse = result.data;
+      // Set cookies
+      document.cookie = `token=${token}; path=/; max-age=86400`; // 24 hours
+      document.cookie = `role=${role}; path=/; max-age=86400`; // 24 hours
 
-      setCookie("token", responseData.token, 7);
-      setCookie("role", responseData.role, 7);
-
-      if (responseData.role === "Admin") {
-        router.push("/admin");
-      } else if (responseData.role === "User") {
-        router.push("/user");
+      // Redirect based on role
+      if (role === "Admin") {
+        push("/admin");
       } else {
-        router.push("/");
+        push("/user");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log("🚀 ~ Login error:", error);
 
-      if (error.response?.status === 401) {
-        setError("password", {
-          type: "manual",
-          message: "Invalid username or password",
-        });
-      } else if (error.response?.status === 400) {
-        setError("username", {
-          type: "manual",
-          message: "Invalid username format",
-        });
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 401) {
+          setError("root", {
+            type: "manual",
+            message: "Invalid username or password",
+          });
+        } else if (error.response?.status === 400) {
+          setError("root", {
+            type: "manual",
+            message: "Please fill in all required fields",
+          });
+        } else {
+          setError("root", {
+            type: "manual",
+            message: "Login failed. Please try again.",
+          });
+        }
       } else {
         setError("root", {
           type: "manual",
@@ -133,18 +100,6 @@ export default function LoginScreen() {
       }
     }
   };
-
-  // ✅ Show loading while checking auth
-  if (isCheckingAuth) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4">
@@ -155,15 +110,37 @@ export default function LoginScreen() {
           </div>
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Blog Genzet</h2>
           <p className="text-gray-600">
-            Sign in to your account to access the latest news
+            Sign in to your account to continue reading
           </p>
         </div>
+
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-green-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-green-800">{successMessage}</p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
             {errors.root && (
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-600">{errors.root.message}</p>
+                <div className="flex items-center">
+                  <div className="flex-shrink-0">
+                    <AlertCircle className="h-5 w-5 text-red-600" />
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-red-600">
+                      {errors.root.message}
+                    </p>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -178,6 +155,7 @@ export default function LoginScreen() {
                 id="username"
                 {...register("username")}
                 type="text"
+                autoComplete="username"
                 className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors duration-200 text-gray-900 placeholder-gray-500 ${
                   errors.username
                     ? "border-red-300 focus:ring-red-500 focus:border-red-500"
@@ -199,17 +177,31 @@ export default function LoginScreen() {
               >
                 Password
               </label>
-              <input
-                id="password"
-                {...register("password")}
-                type="password"
-                className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors duration-200 text-gray-900 placeholder-gray-500 ${
-                  errors.password
-                    ? "border-red-300 focus:ring-red-500 focus:border-red-500"
-                    : "border-gray-300"
-                }`}
-                placeholder="Enter your password"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  {...register("password")}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-600 focus:border-blue-600 transition-colors duration-200 text-gray-900 placeholder-gray-500 pr-12 ${
+                    errors.password
+                      ? "border-red-300 focus:ring-red-500 focus:border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  placeholder="Enter your password"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-500 hover:text-gray-700 transition-colors duration-200"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
+              </div>
               {errors.password && (
                 <p className="mt-1 text-sm text-red-600">
                   {errors.password.message}
@@ -229,10 +221,7 @@ export default function LoginScreen() {
                     Signing in...
                   </div>
                 ) : (
-                  <>
-                    <LogIn className="w-5 h-5 mr-2" />
-                    Sign in to Dashboard
-                  </>
+                  "Sign in"
                 )}
               </button>
             </div>
@@ -240,17 +229,59 @@ export default function LoginScreen() {
 
           <div className="mt-6 text-center">
             <p className="text-sm text-gray-600">
-              Don't have an account?{" "}
+              Don&apos;t have an account?{" "}
               <Link
                 href="/register"
                 className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200"
               >
-                Sign up now
+                Sign up here
               </Link>
             </p>
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// Loading component for Suspense fallback
+function LoginLoading() {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-blue-100 flex items-center justify-center px-4">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg flex items-center justify-center mb-4">
+            <Newspaper className="h-8 w-8 text-white" />
+          </div>
+          <h2 className="text-3xl font-bold text-gray-900 mb-2">Blog Genzet</h2>
+          <p className="text-gray-600">
+            Sign in to your account to continue reading
+          </p>
+        </div>
+
+        <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-100">
+          <div className="animate-pulse space-y-6">
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+              <div className="h-12 bg-gray-200 rounded"></div>
+            </div>
+            <div className="space-y-2">
+              <div className="h-4 bg-gray-200 rounded w-1/4"></div>
+              <div className="h-12 bg-gray-200 rounded"></div>
+            </div>
+            <div className="h-12 bg-gray-200 rounded"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main export component with Suspense
+export default function LoginScreen() {
+  return (
+    <Suspense fallback={<LoginLoading />}>
+      <LoginForm />
+    </Suspense>
   );
 }

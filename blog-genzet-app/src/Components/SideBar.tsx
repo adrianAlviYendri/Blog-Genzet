@@ -1,8 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { Newspaper, User, LogOut, Tag, FileText, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Newspaper, User, Tag, FileText, X } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
 import axios from "axios";
 
 interface ProfileResponse {
@@ -32,7 +32,6 @@ export default function AdminSidebar({
 }: AdminSidebarProps) {
   const router = useRouter();
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   const handleArticlesPage = () => {
     router.push("/admin");
@@ -42,13 +41,12 @@ export default function AdminSidebar({
     router.push("/admin/categories");
   };
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
-      setIsLoading(true);
       const token = getCookie("token");
 
       if (!token) {
-        console.log("No token found in cookies");
+        console.log("No token found");
         router.push("/login");
         return;
       }
@@ -63,25 +61,26 @@ export default function AdminSidebar({
       );
 
       setProfile(data);
-      console.log("Profile loaded:", data);
-    } catch (error: any) {
+
+      if (data.role !== "Admin") {
+        router.push("/user");
+        return;
+      }
+    } catch (error: unknown) {
       console.error("Error fetching profile:", error);
-      if (error.response?.status === 401) {
-        // Clear cookies on unauthorized
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
         document.cookie =
           "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie =
           "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         router.push("/login");
       }
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   return (
     <>
@@ -114,18 +113,10 @@ export default function AdminSidebar({
               </div>
               <div>
                 <div className="text-white font-medium">
-                  {isLoading ? (
-                    <div className="animate-pulse bg-blue-400 h-4 w-16 rounded"></div>
-                  ) : (
-                    profile?.username || "Admin"
-                  )}
+                  {profile?.username || "Admin"}
                 </div>
                 <div className="text-blue-200 text-sm">
-                  {isLoading ? (
-                    <div className="animate-pulse bg-blue-400 h-3 w-12 rounded mt-1"></div>
-                  ) : (
-                    profile?.role || "Administrator"
-                  )}
+                  {profile?.role || "Administrator"}
                 </div>
               </div>
             </div>

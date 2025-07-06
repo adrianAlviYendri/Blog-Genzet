@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   ArrowLeft,
   Calendar,
@@ -69,16 +70,6 @@ export default function ArticleDetailClient({
     });
   };
 
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   const stripHtml = (html: string) => {
     return html.replace(/<[^>]*>/g, "");
   };
@@ -99,12 +90,6 @@ export default function ArticleDetailClient({
   const truncateText = (text: string, maxLength: number) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + "...";
-  };
-
-  const handleImageError = (
-    e: React.SyntheticEvent<HTMLImageElement, Event>
-  ) => {
-    e.currentTarget.style.display = "none";
   };
 
   const handleRelatedArticleClick = (articleId: string) => {
@@ -162,12 +147,13 @@ export default function ArticleDetailClient({
 
         {isValidImageUrl(article.imageUrl) && (
           <div className="mb-8 rounded-xl overflow-hidden shadow-lg">
-            <img
+            <Image
               src={article.imageUrl}
               alt={article.title}
+              width={800}
+              height={400}
               className="w-full h-64 sm:h-80 lg:h-96 object-cover"
-              onError={handleImageError}
-              loading="lazy"
+              sizes="(max-width: 768px) 100vw, 800px"
             />
           </div>
         )}
@@ -189,12 +175,13 @@ export default function ArticleDetailClient({
 
         <footer className="border-t border-gray-200 pt-8">
           <div className="text-sm text-gray-600 text-center">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-center gap-2 sm:gap-4">
-              <span>Published: {formatDateTime(article.createdAt)}</span>
-              {article.createdAt !== article.updatedAt && (
-                <span>Updated: {formatDateTime(article.updatedAt)}</span>
-              )}
-            </div>
+            <p>
+              Published on {formatDate(article.createdAt)} by{" "}
+              <span className="font-medium">{article.user.username}</span>
+            </p>
+            <p className="mt-2">
+              Thank you for reading! Share this article if you found it helpful.
+            </p>
           </div>
         </footer>
       </article>
@@ -202,7 +189,7 @@ export default function ArticleDetailClient({
       <section className="bg-white border-t py-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">
-            Other articles from "{article.category?.name}"
+            Other articles from &ldquo;{article.category?.name}&rdquo;
           </h2>
 
           {relatedArticles.length > 0 ? (
@@ -215,12 +202,13 @@ export default function ArticleDetailClient({
                 >
                   <div className="h-48 overflow-hidden">
                     {isValidImageUrl(relatedArticle.imageUrl) ? (
-                      <img
+                      <Image
                         src={relatedArticle.imageUrl}
                         alt={relatedArticle.title}
+                        width={400}
+                        height={192}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={handleImageError}
-                        loading="lazy"
+                        sizes="(max-width: 768px) 100vw, 400px"
                       />
                     ) : (
                       <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">

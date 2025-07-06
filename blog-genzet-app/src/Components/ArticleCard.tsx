@@ -1,6 +1,7 @@
 "use client";
 
 import { Newspaper, User, Eye } from "lucide-react";
+import Image from "next/image";
 
 interface Category {
   id: string;
@@ -37,7 +38,6 @@ export default function ArticleCard({
   article,
   onArticleClick,
 }: ArticleCardProps) {
-  // Helper Functions
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
@@ -83,12 +83,15 @@ export default function ArticleCard({
       {/* Article Image */}
       <div className="h-40 sm:h-48 overflow-hidden relative">
         {isValidImageUrl(article.imageUrl) ? (
-          <img
+          <Image
             src={article.imageUrl}
             alt={article.title}
-            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+            fill
+            sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+            className="object-cover group-hover:scale-110 transition-transform duration-300"
             onError={handleImageError}
             loading="lazy"
+            unoptimized
           />
         ) : (
           <div className="w-full h-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center group-hover:from-gray-200 group-hover:to-gray-300 transition-colors duration-200">
