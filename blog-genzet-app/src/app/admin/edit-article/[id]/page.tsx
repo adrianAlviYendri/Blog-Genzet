@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import axios from "axios";
@@ -64,7 +64,6 @@ export default function EditArticlePage() {
   const { id } = useParams();
   const searchParams = useSearchParams();
 
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [article, setArticle] = useState<Article | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -78,7 +77,7 @@ export default function EditArticlePage() {
   }
   const token = getCookie("token");
 
-  const loadArticleFromParams = (): Article | null => {
+  const loadArticleFromParams = useCallback((): Article | null => {
     try {
       const title = searchParams.get("title");
       const content = searchParams.get("content");
@@ -123,24 +122,26 @@ export default function EditArticlePage() {
       }
 
       return null;
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error("Error loading article from params:", error);
       return null;
     }
-  };
+  }, [searchParams, id]);
 
-  const fetchArticleFromAPI = async () => {
+  const fetchArticleFromAPI = useCallback(async () => {
     try {
       const { data } = await axios.get<Article>(
         `https://test-fe.mysellerpintar.com/api/articles/${id}`
       );
 
       setArticle(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("Error fetching article from API:", error);
       throw error;
     }
-  };
+  }, [id]);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       if (!token) {
         router.push("/login");
@@ -156,14 +157,14 @@ export default function EditArticlePage() {
         }
       );
 
-      setProfile(data);
-
       if (data.role !== "Admin") {
         router.push("/user");
         return;
       }
-    } catch (error: any) {
-      if (error.response?.status === 401) {
+    } catch (error: unknown) {
+      console.error("Profile fetch error:", error);
+
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
         document.cookie =
           "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie =
@@ -171,20 +172,20 @@ export default function EditArticlePage() {
         router.push("/login");
       }
     }
-  };
+  }, [token, router]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const { data } = await axios.get<CategoryResponse>(
         "https://test-fe.mysellerpintar.com/api/categories?limit=1000"
       );
       setCategories(data.data);
-    } catch (error) {
-      console.log("🚀 ~ fetchCategories ~ error:", error);
+    } catch (error: unknown) {
+      console.error("Categories fetch error:", error);
     }
-  };
+  }, []);
 
-  const loadArticleData = async () => {
+  const loadArticleData = useCallback(async () => {
     try {
       setIsInitialLoading(true);
 
@@ -195,23 +196,24 @@ export default function EditArticlePage() {
       } else {
         await fetchArticleFromAPI();
       }
-    } catch (error) {
+    } catch (error: unknown) {
+      console.error("Error loading article data:", error);
       alert("Error loading article data. Redirecting to articles list.");
       router.push("/admin");
     } finally {
       setIsInitialLoading(false);
     }
-  };
+  }, [loadArticleFromParams, fetchArticleFromAPI, router]);
 
-  const initializeData = async () => {
+  const initializeData = useCallback(async () => {
     await Promise.all([fetchProfile(), fetchCategories(), loadArticleData()]);
-  };
+  }, [fetchProfile, fetchCategories, loadArticleData]);
 
   const handleUpdateArticle = async (data: ArticleFormData) => {
     try {
       setIsLoading(true);
 
-      const response = await axios.put(
+      await axios.put(
         `https://test-fe.mysellerpintar.com/api/articles/${article?.id}`,
         data,
         {
@@ -223,7 +225,8 @@ export default function EditArticlePage() {
       );
 
       router.push("/admin");
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("Article update error:", error);
       throw error;
     } finally {
       setIsLoading(false);
@@ -240,7 +243,7 @@ export default function EditArticlePage() {
 
   useEffect(() => {
     initializeData();
-  }, []);
+  }, [initializeData]);
 
   if (isInitialLoading) {
     return (
@@ -277,8 +280,8 @@ export default function EditArticlePage() {
               Article Not Found
             </h1>
             <p className="text-gray-600 mb-6">
-              The article you're trying to edit doesn't exist or you don't have
-              permission to edit it.
+              The article you&apos;re trying to edit doesn&apos;t exist or you
+              don&apos;t have permission to edit it.
             </p>
             <button
               onClick={handleBackToArticles}

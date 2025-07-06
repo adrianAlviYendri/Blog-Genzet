@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Tag } from "lucide-react";
 import axios from "axios";
-import Swal from "sweetalert2";
 import AdminSidebar from "@/Components/SideBar";
 import CategoryForm from "@/Components/CategoryForm";
 
@@ -22,19 +21,23 @@ interface CategoryFormData {
 
 export default function CreateCategoryPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  function getCookie(name: string): string | undefined {
+  const getCookie = useCallback((name: string): string | undefined => {
+    if (typeof window === "undefined") return undefined;
+
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop()?.split(";").shift();
-  }
-  const token = getCookie("token");
+    return undefined;
+  }, []);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
+      const token = getCookie("token");
+
       if (!token) {
         router.push("/login");
         return;
@@ -49,28 +52,39 @@ export default function CreateCategoryPage() {
         }
       );
 
-      setProfile(data);
-
       if (data.role !== "Admin") {
         router.push("/user");
         return;
       }
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        document.cookie =
-          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie =
-          "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    } catch (error: unknown) {
+      console.error("Profile fetch error:", error);
+
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        // Clear cookies on client side only
+        if (typeof window !== "undefined") {
+          document.cookie =
+            "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          document.cookie =
+            "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        }
         router.push("/login");
       }
+    } finally {
+      setIsInitialLoading(false);
     }
-  };
+  }, [router, getCookie]);
 
   const handleCreateCategory = async (data: CategoryFormData) => {
     try {
       setIsLoading(true);
+      const token = getCookie("token");
 
-      const response = await axios.post(
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      await axios.post(
         "https://test-fe.mysellerpintar.com/api/categories",
         data,
         {
@@ -81,44 +95,10 @@ export default function CreateCategoryPage() {
         }
       );
 
-      await Swal.fire({
-        title: "Success!",
-        text: `Category "${data.name}" has been created successfully!`,
-        icon: "success",
-        showCancelButton: true,
-        confirmButtonText: "Back to Categories",
-        cancelButtonText: "Create Another",
-        confirmButtonColor: "#3B82F6",
-        cancelButtonColor: "#6B7280",
-        reverseButtons: true,
-        customClass: {
-          popup: "rounded-lg",
-          title: "text-gray-900 font-bold",
-          htmlContainer: "text-gray-600",
-          confirmButton: "font-semibold",
-          cancelButton: "font-semibold",
-        },
-      }).then((result) => {
-        if (result.isConfirmed) {
-          router.push("/admin/categories");
-        }
-      });
-    } catch (error: any) {
-      await Swal.fire({
-        title: "Error!",
-        text:
-          error.response?.data?.message ||
-          "Failed to create category. Please try again.",
-        icon: "error",
-        confirmButtonText: "OK",
-        confirmButtonColor: "#EF4444",
-        customClass: {
-          popup: "rounded-lg",
-          title: "text-gray-900 font-bold",
-          htmlContainer: "text-gray-600",
-          confirmButton: "font-semibold",
-        },
-      });
+      router.push("/admin/categories");
+    } catch (error: unknown) {
+      console.error("Category creation error:", error);
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -132,13 +112,27 @@ export default function CreateCategoryPage() {
     router.push("/admin/categories");
   };
 
-  const initializeAllData = async () => {
-    await fetchProfile();
-  };
-
   useEffect(() => {
-    initializeAllData();
-  }, []);
+    fetchProfile();
+  }, [fetchProfile]);
+
+  if (isInitialLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <AdminSidebar
+          isSidebarOpen={isSidebarOpen}
+          toggleSidebar={toggleSidebar}
+          activeMenu="categories"
+        />
+        <div className="lg:ml-64 flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 text-lg">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -161,7 +155,7 @@ export default function CreateCategoryPage() {
             <div className="flex items-center">
               <Tag className="w-5 h-5 text-gray-400 mr-2" />
               <h1 className="text-xl font-semibold text-gray-900">
-                Create Category
+                Create New Category
               </h1>
             </div>
           </div>
@@ -171,11 +165,10 @@ export default function CreateCategoryPage() {
           <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                Add New Category
+                Create New Category
               </h2>
               <p className="text-gray-600">
-                Create a new category to help organize your articles and improve
-                content discovery.
+                Add a new category to organize your articles better.
               </p>
             </div>
 

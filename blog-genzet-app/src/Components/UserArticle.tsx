@@ -109,8 +109,8 @@ export default function UserArticlesClient({
       }
 
       filtered.sort((a, b) => {
-        let aValue: any;
-        let bValue: any;
+        let aValue: string | number;
+        let bValue: string | number;
 
         switch (sortBy) {
           case "title":
@@ -299,7 +299,7 @@ export default function UserArticlesClient({
                 <span className="text-sm text-white/80">Active filters:</span>
                 {debouncedSearchTerm && (
                   <span className="bg-white/20 text-white px-2 py-1 rounded-full text-sm">
-                    Search: "{debouncedSearchTerm}"
+                    Search: &ldquo;{debouncedSearchTerm}&rdquo;
                   </span>
                 )}
                 {selectedCategory && (

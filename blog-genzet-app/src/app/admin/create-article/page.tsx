@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, FileText } from "lucide-react";
 import axios from "axios";
@@ -18,7 +18,10 @@ interface ProfileResponse {
 
 interface Category {
   id: string;
+  userId: string;
   name: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface CategoryResponse {
@@ -36,20 +39,24 @@ interface ArticleFormData {
 
 export default function CreateArticlePage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  function getCookie(name: string): string | undefined {
+  // ✅ FIX: Wrap getCookie dengan useCallback dan guard
+  const getCookie = useCallback((name: string): string | undefined => {
+    if (typeof window === "undefined") return undefined;
+
     const value = `; ${document.cookie}`;
     const parts = value.split(`; ${name}=`);
     if (parts.length === 2) return parts.pop()?.split(";").shift();
-  }
-  const token = getCookie("token");
+    return undefined;
+  }, []);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
+      const token = getCookie("token");
+
       if (!token) {
         router.push("/login");
         return;
@@ -64,37 +71,48 @@ export default function CreateArticlePage() {
         }
       );
 
-      setProfile(data);
-
       if (data.role !== "Admin") {
         router.push("/user");
         return;
       }
-    } catch (error: any) {
-      if (error.response?.status === 401) {
-        document.cookie =
-          "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-        document.cookie =
-          "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    } catch (error: unknown) {
+      console.error("Profile fetch error:", error);
+
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        // Clear cookies on client side only
+        if (typeof window !== "undefined") {
+          document.cookie =
+            "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          document.cookie =
+            "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        }
         router.push("/login");
       }
     }
-  };
+  }, [router, getCookie]);
 
-  const fetchCategories = async () => {
+  const fetchCategories = useCallback(async () => {
     try {
       const { data } = await axios.get<CategoryResponse>(
         "https://test-fe.mysellerpintar.com/api/categories?limit=1000"
       );
       setCategories(data.data);
-    } catch (error) {}
-  };
+    } catch (error: unknown) {
+      console.error("Categories fetch error:", error);
+    }
+  }, []);
 
   const handleCreateArticle = async (data: ArticleFormData) => {
     try {
       setIsLoading(true);
+      const token = getCookie("token");
 
-      const response = await axios.post(
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      await axios.post(
         "https://test-fe.mysellerpintar.com/api/articles",
         data,
         {
@@ -127,12 +145,18 @@ export default function CreateArticlePage() {
           router.push("/admin");
         }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
+      console.error("Article creation error:", error);
+
+      let errorMessage = "Failed to create article. Please try again.";
+
+      if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.message || errorMessage;
+      }
+
       await Swal.fire({
         title: "Error!",
-        text:
-          error.response?.data?.message ||
-          "Failed to create article. Please try again.",
+        text: errorMessage,
         icon: "error",
         confirmButtonText: "OK",
         confirmButtonColor: "#EF4444",
@@ -156,13 +180,13 @@ export default function CreateArticlePage() {
     router.push("/admin");
   };
 
-  const initializeAllData = async () => {
+  const initializeAllData = useCallback(async () => {
     await Promise.all([fetchProfile(), fetchCategories()]);
-  };
+  }, [fetchProfile, fetchCategories]);
 
   useEffect(() => {
     initializeAllData();
-  }, []);
+  }, [initializeAllData]);
 
   return (
     <div className="min-h-screen bg-gray-50">

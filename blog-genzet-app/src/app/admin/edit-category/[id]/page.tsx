@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { ArrowLeft, Tag } from "lucide-react";
 import axios from "axios";
@@ -32,7 +32,6 @@ export default function EditCategoryPage() {
   const { id } = useParams();
   const searchParams = useSearchParams();
 
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [category, setCategory] = useState<Category | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -44,12 +43,7 @@ export default function EditCategoryPage() {
   }
   const token = getCookie("token");
 
-  useEffect(() => {
-    fetchProfile();
-    loadCategoryFromParams();
-  }, []);
-
-  const loadCategoryFromParams = () => {
+  const loadCategoryFromParams = useCallback(() => {
     try {
       const categoryData = {
         id: searchParams.get("id") || (id as string),
@@ -64,16 +58,15 @@ export default function EditCategoryPage() {
         console.log("🚀 ~ Category loaded from params:", categoryData);
       } else {
         console.error("Missing required category data in URL params");
-
         router.push("/admin/categories");
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("🚀 ~ Error loading category from params:", error);
       router.push("/admin/categories");
     }
-  };
+  }, [searchParams, id, router]);
 
-  async function fetchProfile() {
+  const fetchProfile = useCallback(async () => {
     try {
       if (!token) {
         console.log("No token found, redirecting to login");
@@ -91,16 +84,15 @@ export default function EditCategoryPage() {
       );
 
       console.log("🚀 ~ fetchProfile ~ data:", data);
-      setProfile(data);
 
       if (data.role !== "Admin") {
         router.push("/user");
         return;
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log("🚀 ~ fetchProfile ~ error:", error);
 
-      if (error.response?.status === 401) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
         document.cookie =
           "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie =
@@ -108,13 +100,13 @@ export default function EditCategoryPage() {
         router.push("/login");
       }
     }
-  }
+  }, [token, router]);
 
   const handleUpdateCategory = async (data: CategoryFormData) => {
     try {
       setIsLoading(true);
 
-      const response = await axios.put(
+      await axios.put(
         `https://test-fe.mysellerpintar.com/api/categories/${category?.id}`,
         data,
         {
@@ -125,12 +117,12 @@ export default function EditCategoryPage() {
         }
       );
 
-      console.log("🚀 ~ Category updated successfully:", response.data);
-
+      console.log("🚀 ~ Category updated successfully");
       router.push("/admin/categories");
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log("🚀 ~ handleUpdateCategory ~ error:", error);
       throw error;
+    } finally {
       setIsLoading(false);
     }
   };
@@ -142,6 +134,11 @@ export default function EditCategoryPage() {
   const handleBackToCategories = () => {
     router.push("/admin/categories");
   };
+
+  useEffect(() => {
+    fetchProfile();
+    loadCategoryFromParams();
+  }, [fetchProfile, loadCategoryFromParams]);
 
   if (!category) {
     return (
@@ -170,7 +167,6 @@ export default function EditCategoryPage() {
       />
 
       <div className="lg:ml-64 flex flex-col min-h-screen">
-        {/* Header */}
         <header className="bg-white shadow-sm border-b h-16 flex items-center justify-between px-4 lg:px-6">
           <div className="flex items-center">
             <button
@@ -189,10 +185,8 @@ export default function EditCategoryPage() {
           </div>
         </header>
 
-        {/* Main Content Area */}
         <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-50">
           <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            {/* Page Header */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 Edit Category
@@ -203,7 +197,6 @@ export default function EditCategoryPage() {
               </p>
             </div>
 
-            {/* Category Info */}
             <div className="mb-6 bg-gray-100 rounded-lg p-4">
               <div className="flex items-center text-sm text-gray-600 mt-2">
                 <span className="font-medium">Created:</span>
@@ -231,7 +224,6 @@ export default function EditCategoryPage() {
               </div>
             </div>
 
-            {/* Category Form */}
             <CategoryForm
               mode="edit"
               initialValue={category.name}

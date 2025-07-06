@@ -34,16 +34,7 @@ interface Article {
   user: UserData;
 }
 
-interface ProfileResponse {
-  id: string;
-  username: string;
-  role: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 interface AdminArticlesClientProps {
-  initialProfile: ProfileResponse;
   initialArticles: Article[];
   initialCategories: Category[];
 }
@@ -62,7 +53,6 @@ export default function AdminArticlesClient({
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalArticles] = useState(initialArticles.length);
-  const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
@@ -114,18 +104,21 @@ export default function AdminArticlesClient({
 
     const startIndex = (currentPage - 1) * limit;
     const endIndex = startIndex + limit;
-    const paginated = filtered.slice(startIndex, endIndex);
-    setDisplayedArticles(paginated);
+    const displayedData = filtered.slice(startIndex, endIndex);
+    setDisplayedArticles(displayedData);
   }, [allArticles, debouncedSearchTerm, selectedCategory, currentPage, limit]);
+
+  const getCurrentPageInfo = () => {
+    const start = Math.min(
+      (currentPage - 1) * limit + 1,
+      filteredArticles.length
+    );
+    const end = Math.min(currentPage * limit, filteredArticles.length);
+    return { start, end };
+  };
 
   const getFilteredTotal = () => {
     return filteredArticles.length;
-  };
-
-  const getCurrentPageInfo = () => {
-    const start = (currentPage - 1) * limit + 1;
-    const end = Math.min(currentPage * limit, filteredArticles.length);
-    return { start, end };
   };
 
   const getCategoryName = (categoryId: string) => {
@@ -184,9 +177,7 @@ export default function AdminArticlesClient({
   }, [searchTerm]);
 
   useEffect(() => {
-    if (allArticles.length > 0) {
-      applyFiltersAndPagination();
-    }
+    applyFiltersAndPagination();
   }, [applyFiltersAndPagination]);
 
   return (
@@ -262,7 +253,7 @@ export default function AdminArticlesClient({
                   </span>
                   {debouncedSearchTerm && (
                     <span className="bg-blue-100 text-blue-900 px-2 py-1 rounded-full text-sm font-semibold">
-                      Search: "{debouncedSearchTerm}"
+                      Search: &ldquo;{debouncedSearchTerm}&rdquo;
                     </span>
                   )}
                   {selectedCategory && (
@@ -318,7 +309,7 @@ export default function AdminArticlesClient({
 
               <ArticlesTable
                 articles={displayedArticles}
-                isLoading={isLoading}
+                isLoading={false}
                 searchTerm={debouncedSearchTerm}
                 onEditArticle={handleEditArticle}
                 onCreateArticle={handleCreateArticle}
@@ -327,7 +318,7 @@ export default function AdminArticlesClient({
               />
             </div>
 
-            {totalPages > 1 && !isLoading && (
+            {totalPages > 1 && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 px-6 py-4 mt-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
                   <div className="mb-4 sm:mb-0">

@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FileText, Edit3, Plus, Eye, X } from "lucide-react";
 import { useState } from "react";
+import axios from "axios";
 
 const articleSchema = z.object({
   title: z
@@ -64,26 +65,33 @@ export default function ArticleForm({
     },
   });
 
-  // Watch form values for preview
   const watchedValues = watch();
 
   const handleFormSubmit = async (data: ArticleFormData) => {
     try {
       clearErrors();
       await onSubmit(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log("🚀 ~ Form submit error:", error);
 
-      if (error.response?.status === 400) {
-        setError("root", {
-          type: "manual",
-          message: "Invalid article data. Please check your input.",
-        });
-      } else if (error.response?.status === 404) {
-        setError("categoryId", {
-          type: "manual",
-          message: "Selected category not found",
-        });
+      // ✅ Proper error handling with type checking
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 400) {
+          setError("root", {
+            type: "manual",
+            message: "Invalid article data. Please check your input.",
+          });
+        } else if (error.response?.status === 404) {
+          setError("categoryId", {
+            type: "manual",
+            message: "Selected category not found",
+          });
+        } else {
+          setError("root", {
+            type: "manual",
+            message: `Failed to ${mode} article. Please try again.`,
+          });
+        }
       } else {
         setError("root", {
           type: "manual",

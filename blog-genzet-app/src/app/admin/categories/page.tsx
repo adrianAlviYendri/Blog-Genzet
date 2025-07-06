@@ -2,16 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import {
-  User,
-  Search,
-  LogOut,
-  ChevronDown,
-  Plus,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-} from "lucide-react";
+import { Search, Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import axios from "axios";
 import AdminSidebar from "@/Components/SideBar";
 import AdminNavbar from "@/Components/AdminNavBar";
@@ -32,14 +23,6 @@ interface CategoryResponse {
   totalPages: number;
 }
 
-interface ProfileResponse {
-  id: string;
-  username: string;
-  role: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export default function AdminCategoriesPage() {
   const router = useRouter();
 
@@ -48,7 +31,6 @@ export default function AdminCategoriesPage() {
   const [displayedCategories, setDisplayedCategories] = useState<Category[]>(
     []
   );
-  const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCategories, setTotalCategories] = useState(0);
@@ -112,9 +94,9 @@ export default function AdminCategoriesPage() {
     setDisplayedCategories(paginated);
   }, [allCategories, debouncedSearchTerm, currentPage, limit]);
 
-  const initializeData = async () => {
-    await Promise.all([fetchAllCategories()]);
-  };
+  const initializeData = useCallback(async () => {
+    await fetchAllCategories();
+  }, []);
 
   const getFilteredTotal = () => {
     return filteredCategories.length;
@@ -184,11 +166,11 @@ export default function AdminCategoriesPage() {
     if (allCategories.length > 0) {
       applyFiltersAndPagination();
     }
-  }, [applyFiltersAndPagination]);
+  }, [applyFiltersAndPagination, allCategories.length]);
 
   useEffect(() => {
     initializeData();
-  }, []);
+  }, [initializeData]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -245,7 +227,8 @@ export default function AdminCategoriesPage() {
                 {debouncedSearchTerm && (
                   <div className="flex items-center text-sm text-gray-700">
                     <span className="bg-blue-100 text-blue-900 px-2 py-1 rounded-full font-semibold">
-                      "{debouncedSearchTerm}" - {getFilteredTotal()} results
+                      &ldquo;{debouncedSearchTerm}&rdquo; - {getFilteredTotal()}{" "}
+                      results
                     </span>
                   </div>
                 )}
