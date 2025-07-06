@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { User, LogOut, ChevronDown, Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -20,8 +20,8 @@ interface AdminNavbarProps {
   title: string;
 }
 
-// Helper function untuk get cookie di client
 function getCookie(name: string): string | undefined {
+  if (typeof window === "undefined") return undefined;
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
   if (parts.length === 2) return parts.pop()?.split(";").shift();
@@ -38,7 +38,7 @@ export default function AdminNavbar({
   const [profile, setProfile] = useState<ProfileResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setIsLoading(true);
       const token = getCookie("token");
@@ -60,10 +60,9 @@ export default function AdminNavbar({
 
       setProfile(data);
       console.log("Profile loaded:", data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching profile:", error);
-      if (error.response?.status === 401) {
-        // Clear cookies on unauthorized
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
         document.cookie =
           "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
         document.cookie =
@@ -73,21 +72,17 @@ export default function AdminNavbar({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [router]);
 
-  // Handle logout function
   const handleLogout = () => {
-    // Clear cookies
     document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     document.cookie = "role=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-
-    // Redirect to login
     router.push("/login");
   };
 
   useEffect(() => {
     fetchProfile();
-  }, []);
+  }, [fetchProfile]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

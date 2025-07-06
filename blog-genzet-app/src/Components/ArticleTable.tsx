@@ -1,6 +1,7 @@
 "use client";
 
 import { Calendar, FileText, Edit } from "lucide-react";
+import Image from "next/image";
 
 interface Category {
   id: string;
@@ -177,12 +178,15 @@ export default function ArticlesTable({
             {articles.map((article) => (
               <tr key={article.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="w-16 h-12 bg-gray-100 rounded-lg overflow-hidden">
+                  <div className="w-16 h-12 bg-gray-100 rounded-lg overflow-hidden relative">
                     {isValidImageUrl(article.imageUrl) ? (
-                      <img
+                      <Image
                         src={article.imageUrl}
                         alt={article.title}
-                        className="w-full h-full object-cover"
+                        fill
+                        sizes="64px"
+                        className="object-cover"
+                        unoptimized
                         onError={handleImageError}
                       />
                     ) : (

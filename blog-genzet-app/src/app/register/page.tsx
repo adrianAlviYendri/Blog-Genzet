@@ -23,7 +23,6 @@ const registerSchema = z.object({
     .min(1, "Password is required")
     .min(5, "Password must be at least 5 characters")
     .max(100, "Password must be less than 100 characters"),
-  // Hapus role dari schema karena akan di-set default
 });
 
 type RegisterFormData = z.infer<typeof registerSchema>;
@@ -48,7 +47,6 @@ export default function RegisterScreen() {
     try {
       clearErrors();
 
-      // Tambahkan role "User" secara default saat mengirim ke API
       const registerData = {
         ...data,
         role: "User" as const,
@@ -60,23 +58,29 @@ export default function RegisterScreen() {
       );
       console.log("🚀 ~ Register success:", result);
 
-      // Redirect ke login dengan success message
       push(
         "/login?message=Registration successful! Please login with your credentials."
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log("🚀 ~ Register error:", error);
 
-      if (error.response?.status === 409) {
-        setError("username", {
-          type: "manual",
-          message: "Username already exists",
-        });
-      } else if (error.response?.status === 400) {
-        setError("root", {
-          type: "manual",
-          message: "Invalid registration data",
-        });
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 409) {
+          setError("username", {
+            type: "manual",
+            message: "Username already exists",
+          });
+        } else if (error.response?.status === 400) {
+          setError("root", {
+            type: "manual",
+            message: "Invalid registration data",
+          });
+        } else {
+          setError("root", {
+            type: "manual",
+            message: "Registration failed. Please try again.",
+          });
+        }
       } else {
         setError("root", {
           type: "manual",
@@ -157,7 +161,6 @@ export default function RegisterScreen() {
               )}
             </div>
 
-            {/* Role Info - Informational only */}
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center">
                 <div className="flex-shrink-0">

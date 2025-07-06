@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Tag, Plus, Edit3 } from "lucide-react";
+import axios from "axios";
 
 const categorySchema = z.object({
   name: z
@@ -49,19 +50,27 @@ export default function CategoryForm({
     try {
       clearErrors();
       await onSubmit(data);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log("🚀 ~ Form submit error:", error);
 
-      if (error.response?.status === 409) {
-        setError("name", {
-          type: "manual",
-          message: "Category name already exists",
-        });
-      } else if (error.response?.status === 400) {
-        setError("root", {
-          type: "manual",
-          message: "Invalid category data",
-        });
+      // ✅ Proper error handling with type checking
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 409) {
+          setError("name", {
+            type: "manual",
+            message: "Category name already exists",
+          });
+        } else if (error.response?.status === 400) {
+          setError("root", {
+            type: "manual",
+            message: "Invalid category data",
+          });
+        } else {
+          setError("root", {
+            type: "manual",
+            message: `Failed to ${mode} category. Please try again.`,
+          });
+        }
       } else {
         setError("root", {
           type: "manual",

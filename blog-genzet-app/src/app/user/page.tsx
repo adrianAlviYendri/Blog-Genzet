@@ -62,8 +62,8 @@ async function fetchProfile(token: string): Promise<ProfileResponse | null> {
       }
     );
     return data;
-  } catch (error: any) {
-    if (error.response?.status === 401) {
+  } catch (error: unknown) {
+    if (axios.isAxiosError(error) && error.response?.status === 401) {
       return null;
     }
     throw error;
@@ -76,7 +76,8 @@ async function fetchAllArticles(): Promise<Article[]> {
       "https://test-fe.mysellerpintar.com/api/articles?limit=1000"
     );
     return data.data;
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error("Failed to fetch articles:", error);
     return [];
   }
 }
@@ -87,7 +88,8 @@ async function fetchCategories(): Promise<Category[]> {
       "https://test-fe.mysellerpintar.com/api/categories?limit=1000"
     );
     return data.data;
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error("Failed to fetch categories:", error);
     return [];
   }
 }

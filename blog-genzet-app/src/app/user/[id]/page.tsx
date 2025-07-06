@@ -32,8 +32,6 @@ interface Article {
   user: UserData;
 }
 
-interface ArticleDetailResponse extends Article {}
-
 interface ArticleListResponse {
   data: Article[];
   total: number;
@@ -43,11 +41,12 @@ interface ArticleListResponse {
 
 async function fetchArticleDetail(id: string): Promise<Article | null> {
   try {
-    const { data } = await axios.get<ArticleDetailResponse>(
+    const { data } = await axios.get<Article>(
       `https://test-fe.mysellerpintar.com/api/articles/${id}`
     );
     return data;
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error("Failed to fetch article detail:", error);
     return null;
   }
 }
@@ -70,7 +69,8 @@ async function fetchRelatedArticles(
       .slice(0, 3);
 
     return filtered;
-  } catch (error) {
+  } catch (error: unknown) {
+    console.error("Failed to fetch related articles:", error);
     return [];
   }
 }
