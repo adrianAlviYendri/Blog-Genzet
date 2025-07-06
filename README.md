@@ -122,6 +122,22 @@ npm run dev
 4. **Open your browser**
    Navigate to [http://localhost:3000](http://localhost:3000) to see the application.
 
+### 🔐 Demo Credentials
+
+For testing purposes, you can use the following admin credentials:
+
+#### Admin Access
+
+```json
+{
+  "username": "genzet123",
+  "password": "12345",
+  "role": "Admin"
+}
+```
+
+**Note**: These are demo credentials for testing the admin dashboard features. In a production environment, use secure credentials and implement proper user management.
+
 ## 📖 Usage
 
 ### For Users
@@ -133,11 +149,12 @@ npm run dev
 
 ### For Admins
 
-1. **Admin Dashboard** - Access comprehensive management interface
-2. **Manage Articles** - Create, edit, and delete articles
-3. **Manage Categories** - Organize content with custom categories
-4. **Search & Filter** - Advanced search capabilities with real-time results
-5. **Pagination** - Navigate through large datasets efficiently
+1. **Admin Login** - Use the demo credentials above or create an admin account
+2. **Admin Dashboard** - Access comprehensive management interface
+3. **Manage Articles** - Create, edit, and delete articles
+4. **Manage Categories** - Organize content with custom categories
+5. **Search & Filter** - Advanced search capabilities with real-time results
+6. **Pagination** - Navigate through large datasets efficiently
 
 ## 🔧 API Integration
 
